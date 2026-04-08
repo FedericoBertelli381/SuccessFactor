@@ -1,0 +1,287 @@
+Glossario SuccessFactor
+1) Multi-tenancy
+
+Tenant resolver key (query/header): __tenant
+
+Esempi: ?__tenant=AZIENDA%20DI%20TEST
+
+Valore: nome tenant (di solito) o id (se configurato)
+
+2) RoleCode (workflow permissions/policies)
+
+Valori usati in PhaseRolePermissions.RoleCode e PhaseFieldPolicies.RoleCode:
+
+Employee — dipendente (self)
+
+Manager — manager del target (relazione attiva in EmployeeManagers)
+
+HR — HR (derivato da ABP roles contenente “hr”)
+
+* — wildcard: fallback per tutti (se non esiste record specifico)
+
+Regola priorità in WorkflowAuthorizationService:
+HR > Manager > Employee (self) > Employee (generic)
+
+3) Manager relation types
+
+Valori usati in EmployeeManagers.RelationType:
+
+Line
+
+Functional
+
+Project
+
+Hr (se ti serve; attenzione a maiuscole/minuscole: meglio standardizzare a HR o Hr e mantenerlo coerente)
+
+Campi chiave in EmployeeManagers:
+
+IsPrimary — primary per tipo relazione (tipicamente 1 per (EmployeeId, RelationType) “attivo”)
+
+StartDate, EndDate (DateOnly?)
+
+relazione attiva “as-of-date”: StartDate <= d AND (EndDate IS NULL OR EndDate >= d)
+
+4) Access (field policy)
+
+Valori usati in PhaseFieldPolicies.Access:
+
+Hidden — non visibile / non leggibile
+
+Read — visibile ma non modificabile
+
+Edit — modificabile
+
+Campo:
+
+IsRequired — campo richiesto in quella fase/ruolo (a livello UI e validazione server-side dove applicabile)
+
+5) FieldKey (chiavi campi per policy/enforcement)
+
+Usate in PhaseFieldPolicies.FieldKey e nel codice FieldKeys.*.
+
+Goals / Progress
+
+Goals.ProgressPercent
+
+Goals.ActualValue
+
+Goals.Note
+
+Goals.AttachmentId
+
+Competencies / Assessment
+
+Competencies.Score
+
+Competencies.Comment
+
+Competencies.EvidenceAttachmentId
+
+Convenzione: <Area>.<Campo> con . come separatore, case-sensitive “pratica” ma consigliato essere coerenti (Goals.*, Competencies.*).
+
+6) Process / Workflow
+ProcessTemplate
+
+IsDefault (bool): 1 template default per tenant (regola applicativa)
+
+ProcessPhase
+
+Code (string): esempi seed:
+
+SELF
+
+MGR
+
+HR
+
+PhaseOrder (int): ordine crescente
+
+IsTerminal (bool): fase finale (es. HR)
+
+PhaseTransition
+
+ConditionExpr (string, opzionale): placeholder per future regole dinamiche (non ancora valutato)
+
+7) Cycle
+
+Valori usati in Cycles.Status:
+
+Draft
+
+Active
+
+Closed
+
+Date:
+
+StartDate, EndDate (DateOnly?)
+
+8) CycleParticipant
+
+Valori usati in CycleParticipants.Status:
+
+Active
+
+Completed
+
+Excluded
+
+Campi:
+
+CurrentPhaseId (Guid?): fase corrente per dipendente nel ciclo
+
+9) Goals
+Goal
+
+IsLibraryItem (bool): goal “a catalogo” vs specifico
+
+GoalAssignment
+
+Valori usati in GoalAssignments.Status:
+
+Draft
+
+Approved (se lo userai)
+
+InProgress
+
+Closed
+
+Regole implementate:
+
+no duplicati per (CycleId, EmployeeId, GoalId)
+
+somma Weight <= 100 per (CycleId, EmployeeId)
+
+StartDate <= DueDate se entrambe valorizzate
+
+GoalProgressEntry
+
+Campi:
+
+EntryDate (DateOnly)
+
+ProgressPercent (decimal?, 0..100)
+
+ActualValue (decimal?)
+
+Note (string?)
+
+AttachmentId (Guid?)
+
+Regole implementate:
+
+Upsert per (AssignmentId, EntryDate)
+
+Primo progress su assignment Status=Draft ⇒ assignment passa a InProgress (se abilitato)
+
+10) Import batches
+GoalImportBatch / GoalProgressBatch
+
+Valori Status:
+
+Uploaded
+
+Validated
+
+Committed
+
+Failed
+
+Rows:
+
+ValidationStatus:
+
+Pending
+
+Ok
+
+Error
+
+RowNumber:
+
+assegnazione robusta: MAX(RowNumber) + 1
+
+11) Competencies
+Competency
+
+IsActive (bool)
+
+Code (unique per tenant)
+
+CompetencyModel
+
+ScaleType (string): attuale default Numeric
+
+MinScore, MaxScore (int)
+
+CompetencyAssessment
+
+Valori AssessmentType (string; puoi standardizzare):
+
+Self
+
+Manager
+
+Peer
+
+HR
+
+Valori Status:
+
+Draft
+
+Submitted
+
+Closed
+
+Regole implementate:
+
+Score in range MinScore..MaxScore
+
+Submit richiede score per tutte le competenze IsRequired=true
+
+12) Error codes principali (BusinessException)
+
+(da tenere coerenti nei messaggi)
+
+TenantMissing
+
+UserNotAuthenticated
+
+EmployeeNotLinkedToUser
+
+ProcessTemplateNotFound
+
+PhaseNotInTemplate
+
+CycleNotFound
+
+ParticipantNotFound
+
+ParticipantHasNoPhase
+
+PhaseEditNotAllowed
+
+PhaseAdvanceNotAllowed
+
+FieldNotEditable
+
+GoalAssignmentNotFound
+
+GoalAssignmentClosed
+
+ProgressEntryEmpty
+
+ScoreOutOfRange
+
+AssessmentNotFound
+
+AssessmentClosed
+
+RequiredCompetenciesMissingScore
+
+Nota di coerenza (importante)
+
+Dove possibile, preferire enum lato C# e stringa lato DB, ma mantenere una sola “spelling” per i valori (es. sempre Draft e non DRAFT).

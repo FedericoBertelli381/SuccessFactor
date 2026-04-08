@@ -1,0 +1,109 @@
+{
+  "template": "app",
+  "imports": {
+    "Volo.Abp.LeptonXLiteTheme": {
+      "version": "5.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.Account": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.OpenIddict": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.Identity": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.TenantManagement": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.SettingManagement": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.PermissionManagement": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    },
+    "Volo.Abp.FeatureManagement": {
+      "version": "10.1.0",
+      "isInstalled": true,
+      "creationTime": "03/03/2026 08:25:17 +00:00"
+    }
+  },
+  "folders": {
+    "items": {
+      "src": {},
+      "test": {}
+    }
+  },
+  "packages": {
+    "SuccessFactor.Application": {
+      "path": "src/SuccessFactor.Application/SuccessFactor.Application.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.Application.Tests": {
+      "path": "test/SuccessFactor.Application.Tests/SuccessFactor.Application.Tests.abppkg",
+      "folder": "test"
+    },
+    "SuccessFactor.Domain.Shared": {
+      "path": "src/SuccessFactor.Domain.Shared/SuccessFactor.Domain.Shared.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.Application.Contracts": {
+      "path": "src/SuccessFactor.Application.Contracts/SuccessFactor.Application.Contracts.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.HttpApi": {
+      "path": "src/SuccessFactor.HttpApi/SuccessFactor.HttpApi.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.HttpApi.Client": {
+      "path": "src/SuccessFactor.HttpApi.Client/SuccessFactor.HttpApi.Client.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.EntityFrameworkCore.Tests": {
+      "path": "test/SuccessFactor.EntityFrameworkCore.Tests/SuccessFactor.EntityFrameworkCore.Tests.abppkg",
+      "folder": "test"
+    },
+    "SuccessFactor.EntityFrameworkCore": {
+      "path": "src/SuccessFactor.EntityFrameworkCore/SuccessFactor.EntityFrameworkCore.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.TestBase": {
+      "path": "test/SuccessFactor.TestBase/SuccessFactor.TestBase.abppkg",
+      "folder": "test"
+    },
+    "SuccessFactor.Domain.Tests": {
+      "path": "test/SuccessFactor.Domain.Tests/SuccessFactor.Domain.Tests.abppkg",
+      "folder": "test"
+    },
+    "SuccessFactor.HttpApi.Client.ConsoleTestApp": {
+      "path": "test/SuccessFactor.HttpApi.Client.ConsoleTestApp/SuccessFactor.HttpApi.Client.ConsoleTestApp.abppkg",
+      "folder": "test"
+    },
+    "SuccessFactor.DbMigrator": {
+      "path": "src/SuccessFactor.DbMigrator/SuccessFactor.DbMigrator.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.Blazor": {
+      "path": "src/SuccessFactor.Blazor/SuccessFactor.Blazor.abppkg",
+      "folder": "src"
+    },
+    "SuccessFactor.Domain": {
+      "path": "src/SuccessFactor.Domain/SuccessFactor.Domain.abppkg",
+      "folder": "src"
+    }
+  }
+}

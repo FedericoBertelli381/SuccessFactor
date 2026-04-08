@@ -1,0 +1,71 @@
+PROGETTO: SuccessFactor (clone funzionale tipo SuccessFactors Performance Mgmt) – backend ABP + Blazor, no Telerik.
+
+STACK
+- VS 2026, .NET 10
+- ABP Framework (modulare) + EF Core + Mapperly
+- SQL Server 2019 Standard on-prem, DB: SuccessFactor_TEST
+- Multi-tenant via query string/header "__tenant" (es. ?__tenant=AZIENDA DI TEST). 
+- Swagger OK. Nota: Swagger UI non mostrava __tenant come campo (si può aggiungere OperationFilter, ma spesso usiamo direttamente URL browser con ?__tenant=...).
+
+ENTITÀ/AREE GIÀ IMPLEMENTATE (con EF mapping, DTO, AppService dove serve)
+Anagrafiche:
+- Tenants (ABP)
+- Employees (con OrgUnitId/JobRoleId; validazione tenant-safe su OrgUnit/JobRole; gestito parsing ID robusto, string->Guid e whitespace->null)
+- OrgUnits (CRUD)
+- JobRoles (CRUD)
+Manager relationship:
+- EmployeeManagers (N–N) con RelationType (Line/Functional/Project/HR), IsPrimary, StartDate/EndDate (DateOnly?), EndAssignment (chiude con EndDate), ActiveAssignments asOfDate.
+Goals:
+- Goals (CRUD)
+- GoalAssignments (CRUD + regole: no duplicati per cycle+employee+goal; somma pesi <= 100; date coerenti)
+- GoalProgressEntries: AddAsync (upsert per AssignmentId+EntryDate), GetByAssignment, GetLastProgress, GetProgressSummary; regola Draft->InProgress al primo progress.
+Import:
+- GoalImportBatches/Rows + GoalProgressBatches/Rows (staging: CreateBatch/AddRows/Validate/Commit). AddRows usa startRow robusto = MAX(RowNumber)+1.
+Competencies:
+- Competencies (catalog)
+- CompetencyModels + CompetencyModelItems (CRUD/gestione items)
+- CompetencyAssessments + Items: CreateFromModel, UpsertItem (range score), Submit (required ok), Close, GetDetails.
+  Nota: aggiunta colonna ModelId su CompetencyAssessments (ALTER TABLE + FK), per enforcement range/required.
+
+WORKFLOW/PROCESSO
+- ProcessTemplates (CRUD, 1 default per tenant)
+- ProcessPhases (CRUD) + PhaseTransitions (CRUD) legate al Template
+- Cycles (CRUD; TemplateId deve esistere)
+- CycleParticipants + CycleWorkflowAppService: GenerateParticipants (fase iniziale = PhaseOrder minimo), AdvancePhase (usa transizioni o fallback per ordine)
+- PhaseRolePermissions + PhaseFieldPolicies (CRUD) con metodi effective (role-specific o fallback "*").
+- Enforcing server-side:
+  - WorkflowAuthorizationService (EvaluateAsync) calcola RoleCodeUsed (HR > Manager > Employee/self) e permessi/policies effettive.
+  - Enforce già inserito in:
+    - GoalProgress.AddAsync (CanEdit + FieldKeys.*)
+    - CycleWorkflow.AdvancePhase (CanAdvance)
+    - CompetencyAssessment.UpsertItem (CanEdit + FieldKeys.*)
+  - FieldKeys costanti: Goals.ProgressPercent/ActualValue/Note/AttachmentId, Competencies.Score/Comment/EvidenceAttachmentId.
+
+MY CONTEXT + LINK USER↔EMPLOYEE
+- MyContextAppService.GetAsync: risolve Employee via Employees.UserId == CurrentUser.Id; se manca -> EmployeeNotLinkedToUser.
+- EmployeeUserLinkAppService: SearchUsers (ABP users), GetUnlinkedEmployees, Link/Unlink, LinkByEmail.
+
+SEED DEMO (DbMigrator seeding) – OK
+- DataSeedContributor idempotente per tenant:
+  - Demo template + 3 fasi (SELF, MGR, HR terminal) + transizioni
+  - RolePermissions + FieldPolicies minime (Employee edit in SELF, Manager edit in MGR, HR edit in HR; altri read/hidden)
+  - Demo cycle Active + participants (start phase SELF)
+  - 2 demo employees + relazione manager (Line primary)
+  - 2 demo goals + assignments 50/50 per employee
+  - 3 competencies + demo model + items
+  - 1 assessment Self per primo employee + items
+- Nota: il seed NON può linkare Users↔Employees (UserId), va fatto via EmployeeUserLinkAppService o update SQL.
+
+KNOWN FIXES/ISSUES RISOLTE
+- Errore Swagger duplicato RemoteStreamContent risolto: doppia AddAbpSwaggerGen.
+- Errori RowVer mancanti: aggiunto RowVer a Competencies.
+- Errore repo non risolto: mancava DbSet (es. OrgUnits).
+- Conflitto namespace "SuccessFactor.Process" con System.Diagnostics.Process: preferire SuccessFactor.Workflow/ProcessManagement o usare System.Diagnostics.Process.
+- Certificato dev https richiesto al primo run Kestrel.
+
+OBIETTIVO IMMEDIATO (nuova chat)
+- Fare check globale (smoke test) con utenti reali:
+  1) Linkare user ABP -> employee (Employees.UserId) per almeno Demo Employee e Demo Manager
+  2) Verificare MyContext 200 OK
+  3) Verificare enforcement: progress edit consentito/negato per fase/ruolo; advance phase; assessment edit consentito/negato.
+- Dopo smoke test: definire 3 endpoint compositi “user-facing” (MyDashboard / MyGoals / MyAssessments) come ultimo step prima della prima UI Blazor.

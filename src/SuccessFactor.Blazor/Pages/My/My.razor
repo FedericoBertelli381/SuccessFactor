@@ -1,0 +1,516 @@
+﻿@page "/my"
+@using SuccessFactor.My
+@using SuccessFactor.My.Dtos
+@using Microsoft.AspNetCore.WebUtilities
+@inject IMyDashboardAppService MyDashboardAppService
+@inject IMyGoalsAppService MyGoalsAppService
+@inject IMyAssessmentsAppService MyAssessmentsAppService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>My Performance</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">My Performance</h2>
+
+            @if (_dashboard is not null)
+            {
+                <div class="text-muted">
+                    @_dashboard.EmployeeName
+                    <span class="mx-2">•</span>
+                    @_dashboard.CycleName
+                    <span class="mx-2">•</span>
+                    fase: <strong>@(_dashboard.CurrentPhaseCode ?? "-")</strong>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="OpenTeamPage">
+                Team
+            </button>
+
+            <button class="btn btn-outline-secondary" @onclick="RefreshAsync" disabled="@(_loading || _advancing)">
+                @if (_loading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Aggiorna
+            </button>
+
+            @if (_dashboard is not null && _dashboard.CanAdvancePhase)
+            {
+                <button class="btn btn-primary" @onclick="AdvancePhaseAsync" disabled="@(_loading || _advancing)">
+                    @if (_advancing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Advance phase
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">
+            @_error
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">
+            @_successMessage
+        </div>
+    }
+
+    @if (_loading && _dashboard is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento dashboard...</span>
+        </div>
+    }
+    else if (_dashboard is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Goal</div>
+                        <div class="fs-3 fw-semibold">@_dashboard.GoalsCount</div>
+                        <div class="small text-muted">
+                            modificabili: @_dashboard.EditableGoalsCount
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Assessment aperti</div>
+                        <div class="fs-3 fw-semibold">@_dashboard.OpenAssessmentsCount</div>
+                        <div class="small text-muted">
+                            con required mancanti: @_dashboard.MissingRequiredAssessmentsCount
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Puoi aggiornare goal</div>
+                        <div class="fs-5 fw-semibold">
+                            @YesNo(_dashboard.CanEditGoals)
+                        </div>
+                        <div class="small text-muted">
+                            fase corrente: @(_dashboard.CurrentPhaseCode ?? "-")
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6 col-xl-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Puoi avanzare fase</div>
+                        <div class="fs-5 fw-semibold">
+                            @YesNo(_dashboard.CanAdvancePhase)
+                        </div>
+                        <div class="small text-muted">
+                            stato ciclo: @_dashboard.CycleStatus
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Todo</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_dashboard.Todo.Count == 0)
+                        {
+                            <div class="text-muted">Nessuna azione immediata</div>
+                        }
+                        else
+                        {
+                            <ul class="mb-0">
+                                @foreach (var item in _dashboard.Todo)
+                                {
+                                    <li>@item</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Contesto</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Employee</div>
+                                <div>@_dashboard.EmployeeName</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">RoleCode</div>
+                                <div>@_dashboard.RoleCodeUsed</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Ciclo</div>
+                                <div>@_dashboard.CycleName</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Fase corrente</div>
+                                <div>@(_dashboard.CurrentPhaseCode ?? "-")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex flex-wrap gap-2">
+                <button class="@GetTabButtonClass(MyTab.Goals)" @onclick="() => _activeTab = MyTab.Goals">
+                    Goal
+                </button>
+                <button class="@GetTabButtonClass(MyTab.Assessments)" @onclick="() => _activeTab = MyTab.Assessments">
+                    Assessments
+                </button>
+            </div>
+
+            <div class="card-body">
+                @if (_activeTab == MyTab.Goals)
+                {
+                    @if (_goals is null)
+                    {
+                        <div class="text-muted">Nessun dato goal.</div>
+                    }
+                    else if (_goals.Items.Count == 0)
+                    {
+                        <div class="text-muted">Nessun goal assegnato.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Goal</th>
+                                        <th class="text-end">Peso</th>
+                                        <th>Status</th>
+                                        <th>Ultimo progress</th>
+                                        <th>Scadenza</th>
+                                        <th>Permessi</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in _goals.Items)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@item.GoalName</div>
+                                                <div class="small text-muted">
+                                                    target: @FormatDecimal(item.TargetValue)
+                                                </div>
+                                            </td>
+                                            <td class="text-end">@item.Weight</td>
+                                            <td>
+                                                <span class="badge text-bg-light">@item.Status</span>
+                                            </td>
+                                            <td>
+                                                @if (item.LastProgress is null)
+                                                {
+                                                    <span class="text-muted">mai aggiornato</span>
+                                                }
+                                                else
+                                                {
+                                                    <div>@FormatDate(item.LastProgress.EntryDate)</div>
+                                                    <div class="small text-muted">
+                                                        %@FormatDecimal(item.LastProgress.ProgressPercent)
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td>@FormatDate(item.DueDate)</td>
+                                            <td>
+                                                <div class="small">
+                                                    Edit: <strong>@YesNo(item.CanEdit)</strong>
+                                                </div>
+                                                <div class="small text-muted">
+                                                    P:@item.ProgressPercentAccess
+                                                    • A:@item.ActualValueAccess
+                                                    • N:@item.NoteAccess
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-outline-primary btn-sm"
+                                                        @onclick="() => OpenGoalDetail(item.AssignmentId)">
+                                                    Apri
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+                else if (_activeTab == MyTab.Assessments)
+                {
+                    @if (_assessments is null)
+                    {
+                        <div class="text-muted">Nessun dato assessment.</div>
+                    }
+                    else if (_assessments.Items.Count == 0)
+                    {
+                        <div class="text-muted">Nessun assessment aperto.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                        <th>Model</th>
+                                        <th>Items</th>
+                                        <th>Required mancanti</th>
+                                        <th>Permessi</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in _assessments.Items)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@item.AssessmentType</div>
+                                                <div class="small text-muted">@item.TargetEmployeeName</div>
+                                            </td>
+                                            <td>
+                                                <span class="badge text-bg-light">@item.Status</span>
+                                            </td>
+                                            <td>
+                                                <div>@(item.ModelName ?? "-")</div>
+                                                <div class="small text-muted">
+                                                    score: @item.MinScore - @item.MaxScore
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @item.ItemsCount
+                                                <div class="small text-muted">
+                                                    required: @item.RequiredItemsCount
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (item.MissingRequiredCount > 0)
+                                                {
+                                                    <span class="badge text-bg-warning">
+                                                        @item.MissingRequiredCount mancanti
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge text-bg-success">
+                                                        completi
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="small">
+                                                    Edit: <strong>@YesNo(item.CanEdit)</strong>
+                                                </div>
+                                                <div class="small">
+                                                    Submit: <strong>@YesNo(item.CanSubmit)</strong>
+                                                </div>
+                                                <div class="small text-muted">
+                                                    S:@item.ScoreAccess
+                                                    • C:@item.CommentAccess
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-outline-primary btn-sm"
+                                                        @onclick="() => OpenAssessmentDetail(item.AssessmentId)">
+                                                    Apri
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _advancing;
+    private string? _error;
+    private string? _successMessage;
+
+    private MyDashboardDto? _dashboard;
+    private MyGoalsDto? _goals;
+    private MyAssessmentsDto? _assessments;
+
+    private MyTab _activeTab = MyTab.Goals;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _successMessage = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var dashboardTask = MyDashboardAppService.GetAsync(new GetMyDashboardInput());
+            var goalsTask = MyGoalsAppService.GetAsync(new GetMyGoalsInput());
+            var assessmentsTask = MyAssessmentsAppService.GetAsync(new GetMyAssessmentsInput());
+
+            await Task.WhenAll(dashboardTask, goalsTask, assessmentsTask);
+
+            _dashboard = await dashboardTask;
+            _goals = await goalsTask;
+            _assessments = await assessmentsTask;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    private async Task AdvancePhaseAsync()
+    {
+        if (_dashboard is null || _advancing || !_dashboard.CanAdvancePhase)
+        {
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            "Confermi l'avanzamento alla fase successiva?");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _advancing = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await MyDashboardAppService.AdvancePhaseAsync(_dashboard.CycleId);
+
+            await LoadAsync();
+
+            _successMessage = "Fase avanzata correttamente.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _advancing = false;
+        }
+    }
+    private void OpenGoalDetail(Guid assignmentId)
+    {
+        var url = $"/my/goals/{assignmentId}";
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+    private void OpenAssessmentDetail(Guid assessmentId)
+    {
+        var url = $"/my/assessments/{assessmentId}";
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+    private void OpenTeamPage()
+    {
+        var url = "/team";
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string YesNo(bool value) => value ? "Sì" : "No";
+
+    private static string FormatDate(DateOnly? value)
+        => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private static string FormatDecimal(decimal? value)
+        => value?.ToString("0.##") ?? "-";
+
+    private string GetTabButtonClass(MyTab tab)
+        => _activeTab == tab ? "btn btn-primary btn-sm" : "btn btn-outline-secondary btn-sm";
+
+    private enum MyTab
+    {
+        Goals = 1,
+        Assessments = 2
+    }
+}

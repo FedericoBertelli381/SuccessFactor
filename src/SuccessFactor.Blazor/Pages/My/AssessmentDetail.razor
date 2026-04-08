@@ -1,0 +1,233 @@
+﻿@page "/my/assessments/{AssessmentId:guid}"
+@inherits AssessmentDetailBase
+
+<PageTitle>Assessment Detail</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Assessment detail</h2>
+
+            @if (AssessmentSummary is not null)
+            {
+                <div class="text-muted">
+                    @AssessmentSummary.AssessmentType
+                    <span class="mx-2">•</span>
+                    @AssessmentSummary.TargetEmployeeName
+                    <span class="mx-2">•</span>
+                    fase: <strong>@(AssessmentSummary.CurrentPhaseCode ?? AssessmentsData?.CurrentPhaseCode ?? "-")</strong>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="BackToMyPage">
+                Torna a My
+            </button>
+
+            <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@Loading">
+                @if (Loading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Aggiorna
+            </button>
+
+            @if (AssessmentSummary is not null && AssessmentSummary.CanSubmit)
+            {
+                <button class="btn btn-primary" @onclick="SubmitAssessmentAsync" disabled="@Submitting">
+                    @if (Submitting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Submit
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="alert alert-danger mb-4">
+            @Error
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
+    {
+        <div class="alert alert-success mb-4">
+            @SuccessMessage
+        </div>
+    }
+
+    @if (Loading && AssessmentSummary is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento assessment...</span>
+        </div>
+    }
+    else if (AssessmentSummary is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Contesto assessment</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Tipo</div>
+                                <div class="fw-semibold">@AssessmentSummary.AssessmentType</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Status</div>
+                                <div>@AssessmentSummary.Status</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Model</div>
+                                <div>@(AssessmentSummary.ModelName ?? "-")</div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Target</div>
+                                <div>@AssessmentSummary.TargetEmployeeName</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Evaluator</div>
+                                <div>@AssessmentSummary.EvaluatorEmployeeName</div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Score range</div>
+                                <div>@AssessmentSummary.MinScore - @AssessmentSummary.MaxScore</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Items</div>
+                                <div>@AssessmentSummary.ItemsCount</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Required mancanti</div>
+                                <div>@AssessmentSummary.MissingRequiredCount</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Permessi</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            Edit: <strong>@YesNo(AssessmentSummary.CanEdit)</strong>
+                        </div>
+                        <div class="mb-2">
+                            Submit: <strong>@YesNo(AssessmentSummary.CanSubmit)</strong>
+                        </div>
+                        <div class="small text-muted">
+                            Score: @AssessmentSummary.ScoreAccess
+                            <br />
+                            Comment: @AssessmentSummary.CommentAccess
+                            <br />
+                            Evidence: @AssessmentSummary.EvidenceAttachmentAccess
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <strong>Competenze</strong>
+            </div>
+            <div class="card-body">
+                @if (EditableItems.Count == 0)
+                {
+                    <div class="text-muted">Nessun item da visualizzare.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Competenza</th>
+                                    <th class="text-center">Required</th>
+                                    <th class="text-end">Peso</th>
+                                    <th class="text-center">Score</th>
+                                    <th>Comment</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in EditableItems)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@item.CompetencyName</div>
+                                            <div class="small text-muted">@item.CompetencyCode</div>
+                                        </td>
+                                        <td class="text-center">
+                                            @if (item.IsRequired)
+                                            {
+                                                <span class="badge text-bg-warning">Required</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">No</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">@FormatDecimal(item.Weight)</td>
+
+                                        <td style="max-width: 120px;">
+                                            @if (CanEditScore())
+                                            {
+                                                <InputNumber class="form-control form-control-sm"
+                                                             @bind-Value="item.Score" />
+                                            }
+                                            else
+                                            {
+                                                <span>@FormatInt(item.Score)</span>
+                                            }
+                                        </td>
+
+                                        <td style="min-width: 280px;">
+                                            @if (CanEditComment())
+                                            {
+                                                <InputTextArea class="form-control form-control-sm"
+                                                               @bind-Value="item.Comment" />
+                                            }
+                                            else
+                                            {
+                                                <span>@(string.IsNullOrWhiteSpace(item.Comment) ? "-" : item.Comment)</span>
+                                            }
+                                        </td>
+
+                                        <td class="text-end">
+                                            @if (AssessmentSummary.CanEdit && (CanEditScore() || CanEditComment()))
+                                            {
+                                                <button class="btn btn-outline-primary btn-sm"
+                                                        @onclick="() => SaveItemAsync(item)"
+                                                        disabled="@item.Saving">
+                                                    @if (item.Saving)
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                                    }
+                                                    Salva
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>

@@ -1,0 +1,310 @@
+Checklist smoke test completa
+
+Obiettivo: verificare end-to-end tenant → user↔employee → workflow → permessi/policies → enforcement su progress/assessment → advance phase → import batches.
+Esegui in ambiente DEV.
+Per ogni chiamata: aggiungi sempre ?__tenant=<NOME_TENANT> (es. AZIENDA DI TEST).
+Se Swagger non permette __tenant, usa direttamente l’URL in browser o apri Swagger con ...?__tenant=... così prende il cookie.
+
+Preparazione (una tantum)
+
+P0. Tenant
+
+Verifica che esista il tenant (es. AZIENDA DI TEST) e che il seed demo sia già stato eseguito.
+
+P1. Utenti ABP
+
+Crea (o identifica) 2 utenti: uno “manager”, uno “employee”.
+
+(Opzionale) utente “HR” con ruolo contenente “hr” (per test HR).
+
+P2. Link User ↔ Employee
+
+Usa EmployeeUserLinkAppService:
+
+GET /api/app/employee-user-link/unlinked-employees?__tenant=...
+
+GET /api/app/employee-user-link/search-users?filter=...&__tenant=...
+
+POST /api/app/employee-user-link/link?__tenant=... { employeeId, userId }
+
+Atteso: ogni user collegato a un record Employees.UserId.
+
+A) Identità e contesto
+
+A1. MyContext – employee
+
+Login come Employee.
+
+GET /api/app/my-context?__tenant=...
+
+Atteso: 200, employeeId valorizzato, roleCodes contiene "Employee".
+
+A2. MyContext – manager
+
+Login come Manager.
+
+GET /api/app/my-context?__tenant=...
+
+Atteso: roleCodes contiene "Manager" e "Employee".
+
+A3. MyContext – HR (se previsto)
+
+Login come HR (ruolo ABP contenente “hr”).
+
+Atteso: roleCodes contiene "HR".
+
+B) Seed demo: template/fasi/transizioni/policies
+
+B1. ProcessTemplate
+
+GET /api/app/process-template?__tenant=...
+
+Atteso: esiste “Demo Performance Template”, IsDefault=true (o comunque presente).
+
+B2. ProcessPhases
+
+GET /api/app/process-phase?__tenant=...
+
+Filtra mentalmente per TemplateId demo.
+
+Atteso: fasi SELF, MGR, HR con PhaseOrder crescente, HR.IsTerminal=true.
+
+B3. PhaseTransitions
+
+GET /api/app/phase-transition?__tenant=...
+
+Atteso: transizioni SELF→MGR, MGR→HR per lo stesso TemplateId.
+
+B4. PhaseRolePermissions
+
+GET /api/app/phase-role-permission?__tenant=...
+
+Atteso: record per ruoli Employee/Manager/HR sulle 3 fasi (come seed).
+
+B5. PhaseFieldPolicies
+
+GET /api/app/phase-field-policy?__tenant=...
+
+Atteso: policies per FieldKey almeno:
+
+Goals.ProgressPercent
+
+Goals.ActualValue
+
+Goals.Note
+
+Competencies.Score
+
+Competencies.Comment
+con Access coerenti per fase/ruolo.
+
+C) Cycle + Participants
+
+C1. Cycle
+
+GET /api/app/cycle?__tenant=...
+
+Atteso: “Demo Cycle YYYY” con Status=Active. Prendi cycleId, templateId.
+
+C2. Participants
+
+GET /api/app/cycle-participant?__tenant=...
+
+Atteso: per cycleId ci sono partecipanti con CurrentPhaseId = fase SELF.
+
+Se non ci sono: POST /api/app/cycle-workflow/generate-participants?__tenant=... (o endpoint equivalente) e ripeti.
+
+D) Access evaluator (permessi effettivi)
+
+Prendi: cycleId, targetEmployeeId (te stesso o un dipendente), e assicurati che esista CycleParticipant.
+
+D1. Access self in SELF (employee)
+
+Login Employee, target = proprio employeeId
+
+GET /api/app/workflow-access/get-access?cycleId=...&targetEmployeeId=...&__tenant=...
+
+Atteso:
+
+RoleCodeUsed="Employee"
+
+CanEdit=true (SELF)
+
+FieldPolicies: Goals.ProgressPercent Access Edit
+
+D2. Access manager su dipendente in SELF
+
+Login Manager, target = employee subordinato (creato dal seed)
+
+Atteso:
+
+RoleCodeUsed="Manager"
+
+in SELF CanEdit=false (seed)
+
+FieldPolicies per manager in SELF di solito Read
+
+D3. Access HR su dipendente (se hai utente HR)
+
+Login HR, target = employee
+
+Atteso: RoleCodeUsed="HR" e valori coerenti con fase.
+
+E) Obiettivi: assignments e progress (enforcement)
+
+E1. GoalAssignments esistono
+
+GET /api/app/goal-assignment?__tenant=...
+
+Atteso: per ogni employee ci sono 2 assignment (50/50). Prendi un assignmentId del dipendente “Demo Employee”.
+
+E2. Progress Add – Employee su se stesso in SELF
+
+Login Employee, usa un suo assignmentId.
+
+POST /api/app/goal-progress/add?__tenant=...
+
+{ "assignmentId":"...", "entryDate":"2026-03-18", "progressPercent":25, "note":"smoke" }
+
+Atteso: 200 OK (o 201), ritorna entry dto.
+
+E3. Progress Add – Manager sul dipendente in SELF (deve BLOCCARE)
+
+Login Manager, prova a inserire progress sullo stesso assignment del dipendente mentre è ancora in SELF.
+
+Atteso: errore business:
+
+PhaseEditNotAllowed oppure FieldNotEditable.
+
+E4. Progress history
+
+GET /api/app/goal-progress/get-by-assignment?assignmentId=...&__tenant=...
+
+Atteso: entry presente e ordinata.
+
+E5. LastProgress + Summary
+
+GET /api/app/goal-progress/get-last-progress?assignmentId=...&__tenant=... → non null
+
+GET /api/app/goal-progress/get-progress-summary?assignmentId=...&__tenant=... → EntriesCount>=1
+
+F) Advance phase (enforcement)
+
+F1. Advance in SELF – Employee self (consentito)
+
+Login Employee
+
+POST /api/app/cycle-workflow/advance-phase?__tenant=...
+
+{ "cycleId":"...", "employeeId":"<myEmployeeId>", "toPhaseId": null }
+
+Atteso: OK. Ora CycleParticipant.CurrentPhaseId diventa MGR.
+
+F2. Access after advance
+
+Rilancia workflow-access su self.
+
+Atteso: PhaseId = fase MGR, CanEdit (per Employee) ora dovrebbe essere false.
+
+F3. Advance in MGR – Employee (deve BLOCCARE)
+
+Login Employee e prova di nuovo advance.
+
+Atteso: PhaseAdvanceNotAllowed.
+
+F4. Advance in MGR – Manager su dipendente (consentito)
+
+Login Manager, target = dipendente che è in MGR.
+
+Atteso: OK (se seed Manager.CanAdvance=true in MGR). Dopo: phase = HR.
+
+G) Competenze: model + assessment (enforcement)
+
+G1. Competency model
+
+GET /api/app/competency-model?__tenant=...
+
+Atteso: “Demo Competency Model” con Min/Max (1..5). Prendi modelId.
+
+G2. Assessment demo
+
+Trova assessment via:
+
+GET /api/app/competency-assessment/get-details?assessmentId=...&__tenant=...
+(se non sai l’id, fai GET /api/app/competency-assessment?__tenant=... e prendi un assessmentId)
+
+Atteso: items 3 competenze, range Min/Max nel dto.
+
+G3. UpsertItem – in SELF
+
+Login Employee (self) in fase SELF
+
+POST /api/app/competency-assessment/upsert-item?__tenant=...
+
+{ "assessmentId":"...", "competencyId":"...", "score":4, "comment":"ok" }
+
+Atteso: OK.
+
+G4. UpsertItem – fuori fase (deve BLOCCARE)
+
+Porta l’employee in fase MGR o HR (advance).
+
+Login Employee e ripeti UpsertItem.
+
+Atteso: PhaseEditNotAllowed / FieldNotEditable.
+
+G5. Submit assessment
+
+POST /api/app/competency-assessment/submit?assessmentId=...&__tenant=...
+
+Atteso:
+
+OK se tutte required hanno score
+
+altrimenti RequiredCompetenciesMissingScore
+
+H) Import batches (solo “smoke” di pipeline)
+
+H1. GoalImport batch create
+
+POST /api/app/goal-import/create-batch?__tenant=... { cycleId, fileName }
+
+Atteso: batch creato Status=Uploaded.
+
+H2. AddRows
+
+POST /api/app/goal-import/add-rows?batchId=...&__tenant=... con 1–2 righe minime
+
+Atteso: ritorna count e rows in DB con RowNumber coerente (MAX+1).
+
+H3. Validate
+
+POST /api/app/goal-import/validate-batch?batchId=...&__tenant=...
+
+Atteso: Status=Validated, Ok/Error conteggi.
+
+H4. Commit
+
+POST /api/app/goal-import/commit-batch?batchId=...&__tenant=...
+
+Atteso: Committed (o Failed se righe errate). Se committed: nuovi GoalAssignments presenti.
+
+H5. ProgressImport analoghi
+
+CreateBatch/AddRows/Validate/Commit su goal-progress-import.
+
+Esito smoke test
+
+Considera “verde” se passano almeno: A1/A2, C1/C2, D1/D2, E2/E3, F1/F3, G3/G4.
+
+Prossima fase dopo smoke test (consigliata)
+
+Creare endpoint compositi user-facing:
+
+MyDashboard (fase, todo)
+
+MyGoals (assignments + last progress + permissions)
+
+MyAssessments (assessment aperti + missing required)
+
+Solo dopo: prima UI Blazor basata su questi endpoint (minimo rework).

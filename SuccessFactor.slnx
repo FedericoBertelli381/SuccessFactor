@@ -1,0 +1,20 @@
+<Solution>
+    <Folder Name="/src/">
+        <Project Path="src/SuccessFactor.Domain/SuccessFactor.Domain.csproj" />
+        <Project Path="src/SuccessFactor.Application/SuccessFactor.Application.csproj" />
+        <Project Path="src/SuccessFactor.EntityFrameworkCore/SuccessFactor.EntityFrameworkCore.csproj" />
+        <Project Path="src/SuccessFactor.Domain.Shared/SuccessFactor.Domain.Shared.csproj" />
+        <Project Path="src/SuccessFactor.Application.Contracts/SuccessFactor.Application.Contracts.csproj" />
+        <Project Path="src/SuccessFactor.HttpApi/SuccessFactor.HttpApi.csproj" />
+        <Project Path="src/SuccessFactor.HttpApi.Client/SuccessFactor.HttpApi.Client.csproj" />
+        <Project Path="src/SuccessFactor.DbMigrator/SuccessFactor.DbMigrator.csproj" />
+        <Project Path="src/SuccessFactor.Blazor/SuccessFactor.Blazor.csproj" />
+    </Folder>
+    <Folder Name="/test/">
+        <Project Path="test/SuccessFactor.Application.Tests/SuccessFactor.Application.Tests.csproj" />
+        <Project Path="test/SuccessFactor.EntityFrameworkCore.Tests/SuccessFactor.EntityFrameworkCore.Tests.csproj" />
+        <Project Path="test/SuccessFactor.TestBase/SuccessFactor.TestBase.csproj" />
+        <Project Path="test/SuccessFactor.Domain.Tests/SuccessFactor.Domain.Tests.csproj" />
+        <Project Path="test/SuccessFactor.HttpApi.Client.ConsoleTestApp/SuccessFactor.HttpApi.Client.ConsoleTestApp.csproj" />
+    </Folder>
+</Solution>
