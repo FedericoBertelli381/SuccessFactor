@@ -5,3 +5,16 @@ obj/
 *.suo
 *.log
 node_modules/
+# Logs
+Logs/
+*.log
+
+# Blazor static libs
+wwwroot/libs/
+
+# Build
+bin/
+obj/
+
+# Visual Studio
+.vs/
