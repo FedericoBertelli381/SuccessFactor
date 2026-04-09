@@ -27,7 +27,7 @@
         </div>
 
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary" @onclick="BackToTeamPage">
+            <button class="btn btn-outline-secondary" @onclick="BackToTeamPageAsync">
                 Torna a Team
             </button>
 
@@ -73,6 +73,13 @@
     {
         <div class="alert alert-success mb-4">
             @_successMessage
+        </div>
+    }
+    @if (HasDirtyItems() && CanSaveAll())
+    {
+        <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+            <span>Hai modifiche non salvate. Usa <strong>Save all</strong> prima di aggiornare, tornare indietro o fare submit.</span>
+            <span class="badge text-bg-warning">Dirty: @GetDirtyCount()</span>
         </div>
     }
     @if (_loading && _assessment is null)
@@ -213,6 +220,7 @@
                                                        class="form-control form-control-sm"
                                                        min="@_assessment.MinScore"
                                                        max="@_assessment.MaxScore"
+                                                       disabled="@IsInputDisabled(item.CompetencyId)"
                                                        @bind="_editScores[item.CompetencyId]" />
                                             }
                                             else
@@ -226,6 +234,7 @@
                                             {
                                                 <input type="text"
                                                        class="form-control form-control-sm"
+                                                       disabled="@IsInputDisabled(item.CompetencyId)"
                                                        @bind="_editComments[item.CompetencyId]" />
                                             }
                                             else
@@ -236,6 +245,11 @@
                                         <td class="text-end">
                                             @if (_assessment.CanEdit)
                                             {
+                                                <div class="d-flex justify-content-end align-items-center gap-2">
+                                                @if (IsDirty(item.CompetencyId))
+                                                {
+                                                    <span class="badge text-bg-warning">Dirty</span>
+                                                }
                                                 <button class="btn btn-sm btn-primary"
                                                         @onclick="() => SaveItemAsync(item.CompetencyId)"
                                                         disabled="@(_savingItems.Contains(item.CompetencyId) || !IsDirty(item.CompetencyId) || _bulkSaving)">
@@ -248,6 +262,7 @@
                                                         <span>Salva</span>
                                                     }
                                                 </button>
+                                                </div>
                                             }
                                         </td>
                                     </tr>
@@ -287,6 +302,11 @@
 
     private async Task ReloadAsync()
     {
+        if (!await ConfirmDiscardChangesAsync())
+        {
+            return;
+        }
+
         _successMessage = null;
         await LoadAsync();
     }
@@ -384,8 +404,13 @@
             _submitting = false;
         }
     }
-    private void BackToTeamPage()
+    private async Task BackToTeamPageAsync()
     {
+        if (!await ConfirmDiscardChangesAsync())
+        {
+            return;
+        }
+
         var url = "/team";
         var tenant = GetCurrentTenantFromUrl();
 
@@ -525,6 +550,9 @@
            && (string.Equals(_assessment.ScoreAccess, "Edit", StringComparison.OrdinalIgnoreCase)
                || string.Equals(_assessment.CommentAccess, "Edit", StringComparison.OrdinalIgnoreCase));
 
+    private bool IsInputDisabled(Guid competencyId)
+        => _bulkSaving || _submitting || _savingItems.Contains(competencyId);
+
     private bool HasDirtyItems()
         => GetDirtyCompetencyIds().Count > 0;
 
@@ -607,6 +635,18 @@
         {
             AcceptChanges(competencyId);
         }
+    }
+
+    private async Task<bool> ConfirmDiscardChangesAsync()
+    {
+        if (!HasDirtyItems())
+        {
+            return true;
+        }
+
+        return await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            "Ci sono modifiche non salvate. Vuoi continuare e perderle?");
     }
 
     private static string? NormalizeText(string? value)
