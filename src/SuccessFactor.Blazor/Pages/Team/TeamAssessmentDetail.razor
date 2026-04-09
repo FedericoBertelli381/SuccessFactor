@@ -75,6 +75,19 @@
             @_successMessage
         </div>
     }
+    @if (!string.IsNullOrWhiteSpace(GetOperationMessage()))
+    {
+        <div class="alert alert-info d-flex align-items-center gap-2 mb-4">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <span>@GetOperationMessage()</span>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(GetAssessmentInfoMessage()))
+    {
+        <div class="alert alert-info mb-4">
+            @GetAssessmentInfoMessage()
+        </div>
+    }
     @if (HasDirtyItems() && CanSaveAll())
     {
         <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
@@ -350,7 +363,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = $"Errore nel caricamento assessment: {ex.Message}";
         }
         finally
         {
@@ -397,7 +410,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = $"Errore durante il submit assessment: {ex.Message}";
         }
         finally
         {
@@ -481,7 +494,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = $"Errore durante il salvataggio della riga: {ex.Message}";
         }
         finally
         {
@@ -536,7 +549,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = $"Errore durante il save all: {ex.Message}";
         }
         finally
         {
@@ -552,6 +565,51 @@
 
     private bool IsInputDisabled(Guid competencyId)
         => _bulkSaving || _submitting || _savingItems.Contains(competencyId);
+
+    private string? GetOperationMessage()
+    {
+        if (_bulkSaving)
+        {
+            return "Salvataggio multiplo in corso...";
+        }
+
+        if (_submitting)
+        {
+            return "Submit assessment in corso...";
+        }
+
+        if (_loading && _assessment is not null)
+        {
+            return "Aggiornamento assessment in corso...";
+        }
+
+        return null;
+    }
+
+    private string? GetAssessmentInfoMessage()
+    {
+        if (_assessment is null)
+        {
+            return null;
+        }
+
+        if (!_assessment.CanEdit)
+        {
+            return $"Assessment in sola lettura. Status corrente: {_assessment.Status}.";
+        }
+
+        if (HasDirtyItems())
+        {
+            return "Il submit resta disabilitato finché esistono modifiche non salvate.";
+        }
+
+        if (!_assessment.CanSubmit && _assessment.MissingRequiredCount > 0)
+        {
+            return $"Per il submit mancano {_assessment.MissingRequiredCount} score required.";
+        }
+
+        return null;
+    }
 
     private bool HasDirtyItems()
         => GetDirtyCompetencyIds().Count > 0;

@@ -506,3 +506,4 @@ Le prossime modifiche devono essere evolutive, non rivoluzionarie.
 - STEP 14.1 completato: bulk update lato server
 - step 14.2 completato: dirty tracking lato UI
 - step 14.3 completato: polish UX/error handling
+STEP 14 completato: polish UX del detail assessment manager
