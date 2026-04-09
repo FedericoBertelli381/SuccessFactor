@@ -31,7 +31,7 @@
                 Torna a Team
             </button>
 
-            <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@(_loading || _submitting)">
+            <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@(_loading || _submitting || _bulkSaving)">
                 @if (_loading)
                 {
                     <span class="spinner-border spinner-border-sm me-2"></span>
@@ -39,9 +39,20 @@
                 Aggiorna
             </button>
 
+            @if (_assessment is not null && CanSaveAll())
+            {
+                <button class="btn btn-success" @onclick="SaveAllAsync" disabled="@(_loading || _submitting || _bulkSaving || !HasDirtyItems())">
+                    @if (_bulkSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Save all
+                </button>
+            }
+
             @if (_assessment is not null && _assessment.CanSubmit)
             {
-                <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@(_loading || _submitting)">
+                <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@(_loading || _submitting || _bulkSaving || HasDirtyItems())">
                     @if (_submitting)
                     {
                         <span class="spinner-border spinner-border-sm me-2"></span>
@@ -146,7 +157,16 @@
 
         <div class="card shadow-sm">
             <div class="card-header bg-white">
-                <strong>Competenze</strong>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <strong>Competenze</strong>
+
+                    @if (HasDirtyItems())
+                    {
+                        <span class="badge text-bg-warning">
+                            Modifiche non salvate: @GetDirtyCount()
+                        </span>
+                    }
+                </div>
             </div>
             <div class="card-body">
                 @if (_assessment.Items.Count == 0)
@@ -170,7 +190,7 @@
                             <tbody>
                                 @foreach (var item in _assessment.Items)
                                 {
-                                    <tr>
+                                    <tr class="@(IsDirty(item.CompetencyId) ? "table-warning" : null)">
                                         <td>
                                             <div class="fw-semibold">@item.CompetencyName</div>
                                             <div class="small text-muted">@item.CompetencyCode</div>
@@ -191,6 +211,8 @@
                                             {
                                                 <input type="number"
                                                        class="form-control form-control-sm"
+                                                       min="@_assessment.MinScore"
+                                                       max="@_assessment.MaxScore"
                                                        @bind="_editScores[item.CompetencyId]" />
                                             }
                                             else
@@ -216,7 +238,7 @@
                                             {
                                                 <button class="btn btn-sm btn-primary"
                                                         @onclick="() => SaveItemAsync(item.CompetencyId)"
-                                                        disabled="@_savingItems.Contains(item.CompetencyId)">
+                                                        disabled="@(_savingItems.Contains(item.CompetencyId) || !IsDirty(item.CompetencyId) || _bulkSaving)">
                                                     @if (_savingItems.Contains(item.CompetencyId))
                                                     {
                                                         <span class="spinner-border spinner-border-sm"></span>
@@ -248,12 +270,16 @@
 
     private bool _loading;
     private bool _submitting;
+    private bool _bulkSaving;
     private string? _error;
     private string? _successMessage;
     private MyAssessmentItemDto? _assessment;
     private Dictionary<Guid, int?> _editScores = new();
     private Dictionary<Guid, string?> _editComments = new();
+    private Dictionary<Guid, int?> _originalScores = new();
+    private Dictionary<Guid, string?> _originalComments = new();
     private HashSet<Guid> _savingItems = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
@@ -292,6 +318,14 @@
                 _editComments = _assessment.Items.ToDictionary(
                     x => x.CompetencyId,
                     x => x.Comment);
+
+                _originalScores = _assessment.Items.ToDictionary(
+                    x => x.CompetencyId,
+                    x => x.Score);
+
+                _originalComments = _assessment.Items.ToDictionary(
+                    x => x.CompetencyId,
+                    x => x.Comment);
             }
         }
         catch (Exception ex)
@@ -305,8 +339,15 @@
     }
     private async Task SubmitAsync()
     {
-        if (_assessment is null || !_assessment.CanSubmit || _submitting)
+        if (_assessment is null || !_assessment.CanSubmit || _submitting || _bulkSaving)
         {
+            return;
+        }
+
+        if (HasDirtyItems())
+        {
+            _error = "Salva prima le modifiche pendenti.";
+            _successMessage = null;
             return;
         }
 
@@ -383,6 +424,16 @@
             return;
         }
 
+        if (!IsDirty(competencyId))
+        {
+            return;
+        }
+
+        if (!ValidateItems(new[] { competencyId }))
+        {
+            return;
+        }
+
         _savingItems.Add(competencyId);
         _error = null;
         _successMessage = null;
@@ -401,6 +452,7 @@
                 _assessment.CycleId);
 
             _successMessage = "Riga salvata correttamente.";
+            AcceptChanges(competencyId);
         }
         catch (Exception ex)
         {
@@ -411,6 +463,155 @@
             _savingItems.Remove(competencyId);
         }
     }
+
+    private async Task SaveAllAsync()
+    {
+        if (_assessment is null || !_assessment.CanEdit || _bulkSaving)
+        {
+            return;
+        }
+
+        var dirtyIds = GetDirtyCompetencyIds();
+
+        if (dirtyIds.Count == 0)
+        {
+            return;
+        }
+
+        if (!ValidateItems(dirtyIds))
+        {
+            return;
+        }
+
+        _bulkSaving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var savedCount = await TeamAssessmentsAppService.UpdateItemsAsync(
+                TargetEmployeeId,
+                AssessmentId,
+                new BulkUpdateTeamAssessmentItemsDto
+                {
+                    Items = dirtyIds
+                        .Select(competencyId => new UpdateTeamAssessmentItemDto
+                        {
+                            CompetencyId = competencyId,
+                            Score = _editScores[competencyId],
+                            Comment = _editComments[competencyId]
+                        })
+                        .ToList()
+                },
+                _assessment.CycleId);
+
+            AcceptChanges(dirtyIds);
+            await LoadAsync();
+            _successMessage = $"Salvate {savedCount} righe correttamente.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _bulkSaving = false;
+        }
+    }
+
+    private bool CanSaveAll()
+        => _assessment is not null
+           && _assessment.CanEdit
+           && (string.Equals(_assessment.ScoreAccess, "Edit", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(_assessment.CommentAccess, "Edit", StringComparison.OrdinalIgnoreCase));
+
+    private bool HasDirtyItems()
+        => GetDirtyCompetencyIds().Count > 0;
+
+    private int GetDirtyCount()
+        => GetDirtyCompetencyIds().Count;
+
+    private List<Guid> GetDirtyCompetencyIds()
+        => _assessment?.Items
+            .Select(x => x.CompetencyId)
+            .Where(IsDirty)
+            .ToList()
+            ?? [];
+
+    private bool IsDirty(Guid competencyId)
+    {
+        var currentScore = _editScores.GetValueOrDefault(competencyId);
+        var originalScore = _originalScores.GetValueOrDefault(competencyId);
+
+        if (currentScore != originalScore)
+        {
+            return true;
+        }
+
+        var currentComment = NormalizeText(_editComments.GetValueOrDefault(competencyId));
+        var originalComment = NormalizeText(_originalComments.GetValueOrDefault(competencyId));
+
+        return !string.Equals(currentComment, originalComment, StringComparison.Ordinal);
+    }
+
+    private bool ValidateItems(IEnumerable<Guid> competencyIds)
+    {
+        if (_assessment is null)
+        {
+            return false;
+        }
+
+        foreach (var competencyId in competencyIds)
+        {
+            var item = _assessment.Items.First(x => x.CompetencyId == competencyId);
+            var score = _editScores.GetValueOrDefault(competencyId);
+            var comment = _editComments.GetValueOrDefault(competencyId);
+
+            if (item.IsRequired
+                && string.Equals(_assessment.ScoreAccess, "Edit", StringComparison.OrdinalIgnoreCase)
+                && !score.HasValue)
+            {
+                _error = $"La competenza '{item.CompetencyCode}' richiede uno score.";
+                _successMessage = null;
+                return false;
+            }
+
+            if (score.HasValue
+                && (score.Value < _assessment.MinScore || score.Value > _assessment.MaxScore))
+            {
+                _error = $"Lo score per '{item.CompetencyCode}' deve essere tra {_assessment.MinScore} e {_assessment.MaxScore}.";
+                _successMessage = null;
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(comment) && comment.Length > 2000)
+            {
+                _error = $"Il commento per '{item.CompetencyCode}' supera 2000 caratteri.";
+                _successMessage = null;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void AcceptChanges(Guid competencyId)
+    {
+        _originalScores[competencyId] = _editScores.GetValueOrDefault(competencyId);
+        _originalComments[competencyId] = _editComments.GetValueOrDefault(competencyId);
+    }
+
+    private void AcceptChanges(IEnumerable<Guid> competencyIds)
+    {
+        foreach (var competencyId in competencyIds)
+        {
+            AcceptChanges(competencyId);
+        }
+    }
+
+    private static string? NormalizeText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private static string YesNo(bool value) => value ? "Sì" : "No";
 
     private static string FormatDecimal(decimal? value)
