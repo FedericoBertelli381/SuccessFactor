@@ -14,7 +14,6 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
-using static SuccessFactor.Team.ITeamAssessmentsAppService;
 
 namespace SuccessFactor.Team;
 
@@ -284,10 +283,69 @@ public class TeamAssessmentsAppService : ApplicationService, ITeamAssessmentsApp
         await _competencyAssessmentAppService.SubmitAsync(assessmentId);
     }
     public async Task UpdateItemAsync(
-    Guid targetEmployeeId,
-    Guid assessmentId,
-    UpdateTeamAssessmentItemDto input,
-    Guid? cycleId)
+        Guid targetEmployeeId,
+        Guid assessmentId,
+        UpdateTeamAssessmentItemDto input,
+        Guid? cycleId)
+    {
+        if (input is null)
+        {
+            throw new BusinessException("AssessmentItemInputRequired");
+        }
+
+        var editableContext = await LoadEditableAssessmentContextAsync(
+            targetEmployeeId,
+            assessmentId,
+            cycleId);
+
+        await ApplyItemChangesAsync(
+            assessmentId,
+            input,
+            editableContext.ScoreAccess,
+            editableContext.CommentAccess,
+            autoSave: true);
+    }
+
+    public async Task<int> UpdateItemsAsync(
+        Guid targetEmployeeId,
+        Guid assessmentId,
+        BulkUpdateTeamAssessmentItemsDto input,
+        Guid? cycleId)
+    {
+        if (input?.Items == null || input.Items.Count == 0)
+        {
+            throw new BusinessException("AssessmentItemsRequired");
+        }
+
+        var editableContext = await LoadEditableAssessmentContextAsync(
+            targetEmployeeId,
+            assessmentId,
+            cycleId);
+
+        var itemsToUpdate = input.Items
+            .GroupBy(x => x.CompetencyId)
+            .Select(g => g.Last())
+            .ToList();
+
+        foreach (var item in itemsToUpdate)
+        {
+            await ApplyItemChangesAsync(
+                assessmentId,
+                item,
+                editableContext.ScoreAccess,
+                editableContext.CommentAccess,
+                autoSave: false);
+        }
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+
+        return itemsToUpdate.Count;
+    }
+
+    private async Task<TeamAssessmentEditContext> LoadEditableAssessmentContextAsync(
+        Guid targetEmployeeId,
+        Guid assessmentId,
+        Guid? cycleId)
     {
         var context = await _teamWorkflowContextResolver.ResolveAsync(
             targetEmployeeId,
@@ -321,31 +379,53 @@ public class TeamAssessmentsAppService : ApplicationService, ITeamAssessmentsApp
             FieldScore,
             FieldComment);
 
+        return new TeamAssessmentEditContext(
+            fieldAccess[FieldScore],
+            fieldAccess[FieldComment]);
+    }
+
+    private async Task ApplyItemChangesAsync(
+        Guid assessmentId,
+        UpdateTeamAssessmentItemDto input,
+        string scoreAccess,
+        string commentAccess,
+        bool autoSave)
+    {
         var item = await _assessmentItemRepository.FirstOrDefaultAsync(x =>
             x.AssessmentId == assessmentId &&
             x.CompetencyId == input.CompetencyId);
 
-        if (item == null)
+        var isNewItem = item == null;
+
+        if (isNewItem)
         {
             item = new CompetencyAssessmentItem
             {
                 AssessmentId = assessmentId,
                 CompetencyId = input.CompetencyId
             };
-
-            await _assessmentItemRepository.InsertAsync(item);
         }
 
-        if (string.Equals(fieldAccess[FieldScore], "Edit", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(scoreAccess, "Edit", StringComparison.OrdinalIgnoreCase))
         {
             item.Score = input.Score;
         }
 
-        if (string.Equals(fieldAccess[FieldComment], "Edit", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(commentAccess, "Edit", StringComparison.OrdinalIgnoreCase))
         {
             item.Comment = input.Comment;
         }
 
-        await _assessmentItemRepository.UpdateAsync(item, autoSave: true);
+        if (isNewItem)
+        {
+            await _assessmentItemRepository.InsertAsync(item, autoSave: autoSave);
+            return;
+        }
+
+        await _assessmentItemRepository.UpdateAsync(item, autoSave: autoSave);
     }
+
+    private sealed record TeamAssessmentEditContext(
+        string ScoreAccess,
+        string CommentAccess);
 }
