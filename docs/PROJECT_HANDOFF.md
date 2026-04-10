@@ -510,3 +510,4 @@ STEP 15 completato: polish UX del detail assessment manager
 STEP 16 completato: primo HR flow base
 STEP 17 completato: HR target flow read-only con cambio ciclo e selezione dipendente. Descrizione: la dashboard HR permette di cambiare ciclo, selezionare un dipendente del ciclo e visualizzare in sola lettura goals e assessments del target, mantenendo il tenant in query string e senza toccare i flow My* e Team*.
 STEP 18 completato: HR detail dedicati per goals e assessments target. Descrizione: Aggiunte pagine HR dedicate per il dettaglio read-only di goals e assessments del target, collegate dalla dashboard HR e con preservazione di cycleId, targetEmployeeId e tenant nella navigazione.
+STEP 19 completato: Admin config minima workflow e permessi. Descrizione: Aggiunta una prima area admin per configurare template/fasi, role permissions e field policies del workflow, con create/update/delete, validazioni minime e preservazione del tenant in navigazione.

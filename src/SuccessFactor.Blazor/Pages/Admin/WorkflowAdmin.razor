@@ -1,0 +1,613 @@
+@page "/admin/workflow"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Admin
+@using SuccessFactor.Workflow
+@inject IWorkflowAdminAppService WorkflowAdminAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Workflow Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Workflow Admin</h2>
+
+            @if (_data is not null && _data.SelectedTemplateId.HasValue)
+            {
+                <div class="text-muted">
+                    template: @_data.SelectedTemplateName
+                    <span class="mx-2">-</span>
+                    fase: <strong>@(_data.SelectedPhaseCode ?? "-")</strong>
+                </div>
+            }
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento configurazione workflow...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Selezione</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Template</label>
+                            <select class="form-select"
+                                    value="@(_selectedTemplateId?.ToString() ?? string.Empty)"
+                                    @onchange="OnTemplateChangedAsync">
+                                @if (_data.Templates.Count == 0)
+                                {
+                                    <option value="">Nessun template disponibile</option>
+                                }
+                                else
+                                {
+                                    @foreach (var template in _data.Templates)
+                                    {
+                                        <option value="@template.TemplateId">@template.TemplateName (v@template.Version)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Fase</label>
+                            <select class="form-select"
+                                    value="@(_selectedPhaseId?.ToString() ?? string.Empty)"
+                                    @onchange="OnPhaseChangedAsync"
+                                    disabled="@(_data.Phases.Count == 0)">
+                                @if (_data.Phases.Count == 0)
+                                {
+                                    <option value="">Nessuna fase disponibile</option>
+                                }
+                                else
+                                {
+                                    @foreach (var phase in _data.Phases)
+                                    {
+                                        <option value="@phase.PhaseId">@phase.PhaseOrder - @phase.PhaseCode - @phase.PhaseName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="small text-muted">
+                            template: @_data.Templates.Count
+                            <br />
+                            fasi: @_data.Phases.Count
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Contesto</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Template</div>
+                                <div class="fw-semibold">@(_data.SelectedTemplateName ?? "-")</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Fase</div>
+                                <div>@(string.IsNullOrWhiteSpace(_data.SelectedPhaseCode) ? "-" : $"{_data.SelectedPhaseCode} - {_data.SelectedPhaseName}")</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Role permissions</div>
+                                <div>@_data.RolePermissions.Count</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Field policies</div>
+                                <div>@_data.FieldPolicies.Count</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (_data.SelectedTemplateId.HasValue && _data.SelectedPhaseId.HasValue)
+        {
+            <div class="row g-3">
+                <div class="col-12 col-xxl-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white">
+                            <strong>Role permissions</strong>
+                        </div>
+                        <div class="card-body">
+                            <EditForm Model="_rolePermissionForm" OnValidSubmit="SaveRolePermissionAsync">
+                                <DataAnnotationsValidator />
+                                <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">RoleCode</label>
+                                        <InputText class="form-control" @bind-Value="_rolePermissionForm.RoleCode" />
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label">View</label>
+                                        <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_rolePermissionForm.CanView" />
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label">Edit</label>
+                                        <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_rolePermissionForm.CanEdit" />
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label">Submit</label>
+                                        <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_rolePermissionForm.CanSubmit" />
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label">Advance</label>
+                                        <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_rolePermissionForm.CanAdvance" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">ConditionExpr</label>
+                                        <InputText class="form-control" @bind-Value="_rolePermissionForm.ConditionExpr" />
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mb-4">
+                                    <button class="btn btn-primary" type="submit" disabled="@_savingRolePermission">Salva permission</button>
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ResetRolePermissionForm">Nuova</button>
+                                </div>
+                            </EditForm>
+
+                            @if (_data.RolePermissions.Count == 0)
+                            {
+                                <div class="text-muted">Nessuna role permission configurata.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Role</th>
+                                                <th>View</th>
+                                                <th>Edit</th>
+                                                <th>Submit</th>
+                                                <th>Advance</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in _data.RolePermissions)
+                                            {
+                                                <tr>
+                                                    <td class="fw-semibold">@item.RoleCode</td>
+                                                    <td>@YesNo(item.CanView)</td>
+                                                    <td>@YesNo(item.CanEdit)</td>
+                                                    <td>@YesNo(item.CanSubmit)</td>
+                                                    <td>@YesNo(item.CanAdvance)</td>
+                                                    <td class="text-end">
+                                                        <div class="d-flex justify-content-end gap-2">
+                                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditRolePermission(item)">Modifica</button>
+                                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteRolePermissionAsync(item.Id)">Elimina</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xxl-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white">
+                            <strong>Field policies</strong>
+                        </div>
+                        <div class="card-body">
+                            <EditForm Model="_fieldPolicyForm" OnValidSubmit="SaveFieldPolicyAsync">
+                                <DataAnnotationsValidator />
+                                <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">FieldKey</label>
+                                        <InputText class="form-control" @bind-Value="_fieldPolicyForm.FieldKey" />
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label">RoleCode</label>
+                                        <InputText class="form-control" @bind-Value="_fieldPolicyForm.RoleCode" />
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label">Access</label>
+                                        <InputSelect class="form-select" @bind-Value="_fieldPolicyForm.Access">
+                                            <option value="Hidden">Hidden</option>
+                                            <option value="Read">Read</option>
+                                            <option value="Edit">Edit</option>
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12 col-md-2">
+                                        <label class="form-label">Required</label>
+                                        <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_fieldPolicyForm.IsRequired" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">ConditionExpr</label>
+                                        <InputText class="form-control" @bind-Value="_fieldPolicyForm.ConditionExpr" />
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mb-4">
+                                    <button class="btn btn-primary" type="submit" disabled="@_savingFieldPolicy">Salva policy</button>
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ResetFieldPolicyForm">Nuova</button>
+                                </div>
+                            </EditForm>
+
+                            @if (_data.FieldPolicies.Count == 0)
+                            {
+                                <div class="text-muted">Nessuna field policy configurata.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>FieldKey</th>
+                                                <th>Role</th>
+                                                <th>Access</th>
+                                                <th>Required</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in _data.FieldPolicies)
+                                            {
+                                                <tr>
+                                                    <td class="fw-semibold">@item.FieldKey</td>
+                                                    <td>@item.RoleCode</td>
+                                                    <td>@item.Access</td>
+                                                    <td>@YesNo(item.IsRequired)</td>
+                                                    <td class="text-end">
+                                                        <div class="d-flex justify-content-end gap-2">
+                                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditFieldPolicy(item)">Modifica</button>
+                                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteFieldPolicyAsync(item.Id)">Elimina</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "templateId")]
+    public Guid? TemplateId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "phaseId")]
+    public Guid? PhaseId { get; set; }
+
+    private bool _loading;
+    private bool _savingRolePermission;
+    private bool _savingFieldPolicy;
+    private string? _error;
+    private string? _successMessage;
+    private WorkflowAdminDto? _data;
+    private Guid? _selectedTemplateId;
+    private Guid? _selectedPhaseId;
+    private RolePermissionFormModel _rolePermissionForm = new();
+    private FieldPolicyFormModel _fieldPolicyForm = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedTemplateId = TemplateId;
+        _selectedPhaseId = PhaseId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await WorkflowAdminAppService.GetAsync(new GetWorkflowAdminInput
+            {
+                TemplateId = _selectedTemplateId,
+                PhaseId = _selectedPhaseId
+            });
+
+            _selectedTemplateId = _data.SelectedTemplateId;
+            _selectedPhaseId = _data.SelectedPhaseId;
+
+            ResetRolePermissionForm();
+            ResetFieldPolicyForm();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnTemplateChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var templateId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedTemplateId = templateId;
+        _selectedPhaseId = null;
+        NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, null));
+        return Task.CompletedTask;
+    }
+
+    private Task OnPhaseChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var phaseId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedPhaseId = phaseId;
+        NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, _selectedPhaseId));
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveRolePermissionAsync()
+    {
+        if (!_selectedTemplateId.HasValue || !_selectedPhaseId.HasValue)
+        {
+            return;
+        }
+
+        _savingRolePermission = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.SaveRolePermissionAsync(_rolePermissionForm.Id, new CreateUpdatePhaseRolePermissionDto
+            {
+                TemplateId = _selectedTemplateId.Value,
+                PhaseId = _selectedPhaseId.Value,
+                RoleCode = _rolePermissionForm.RoleCode ?? string.Empty,
+                CanView = _rolePermissionForm.CanView,
+                CanEdit = _rolePermissionForm.CanEdit,
+                CanSubmit = _rolePermissionForm.CanSubmit,
+                CanAdvance = _rolePermissionForm.CanAdvance,
+                ConditionExpr = _rolePermissionForm.ConditionExpr
+            });
+
+            _successMessage = "Role permission salvata correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _savingRolePermission = false;
+        }
+    }
+
+    private async Task DeleteRolePermissionAsync(Guid id)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.DeleteRolePermissionAsync(id);
+            _successMessage = "Role permission eliminata correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveFieldPolicyAsync()
+    {
+        if (!_selectedTemplateId.HasValue || !_selectedPhaseId.HasValue)
+        {
+            return;
+        }
+
+        _savingFieldPolicy = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.SaveFieldPolicyAsync(_fieldPolicyForm.Id, new CreateUpdatePhaseFieldPolicyDto
+            {
+                TemplateId = _selectedTemplateId.Value,
+                PhaseId = _selectedPhaseId.Value,
+                FieldKey = _fieldPolicyForm.FieldKey ?? string.Empty,
+                RoleCode = _fieldPolicyForm.RoleCode ?? string.Empty,
+                Access = _fieldPolicyForm.Access ?? "Read",
+                IsRequired = _fieldPolicyForm.IsRequired,
+                ConditionExpr = _fieldPolicyForm.ConditionExpr
+            });
+
+            _successMessage = "Field policy salvata correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _savingFieldPolicy = false;
+        }
+    }
+
+    private async Task DeleteFieldPolicyAsync(Guid id)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.DeleteFieldPolicyAsync(id);
+            _successMessage = "Field policy eliminata correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void EditRolePermission(PhaseRolePermissionDto item)
+    {
+        _rolePermissionForm = new RolePermissionFormModel
+        {
+            Id = item.Id,
+            RoleCode = item.RoleCode,
+            CanView = item.CanView,
+            CanEdit = item.CanEdit,
+            CanSubmit = item.CanSubmit,
+            CanAdvance = item.CanAdvance,
+            ConditionExpr = item.ConditionExpr
+        };
+    }
+
+    private void ResetRolePermissionForm()
+    {
+        _rolePermissionForm = new RolePermissionFormModel
+        {
+            CanView = true,
+            RoleCode = "*"
+        };
+    }
+
+    private void EditFieldPolicy(PhaseFieldPolicyDto item)
+    {
+        _fieldPolicyForm = new FieldPolicyFormModel
+        {
+            Id = item.Id,
+            FieldKey = item.FieldKey,
+            RoleCode = item.RoleCode,
+            Access = item.Access,
+            IsRequired = item.IsRequired,
+            ConditionExpr = item.ConditionExpr
+        };
+    }
+
+    private void ResetFieldPolicyForm()
+    {
+        _fieldPolicyForm = new FieldPolicyFormModel
+        {
+            Access = "Read",
+            RoleCode = "*"
+        };
+    }
+
+    private string BuildUrl(Guid? templateId, Guid? phaseId)
+    {
+        var query = new System.Collections.Generic.Dictionary<string, string?>();
+
+        if (templateId.HasValue)
+        {
+            query["templateId"] = templateId.Value.ToString();
+        }
+
+        if (phaseId.HasValue)
+        {
+            query["phaseId"] = phaseId.Value.ToString();
+        }
+
+        var tenant = GetCurrentTenantFromUrl();
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            query["__tenant"] = tenant;
+        }
+
+        return QueryHelpers.AddQueryString("/admin/workflow", query!);
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string YesNo(bool value) => value ? "Si" : "No";
+
+    private class RolePermissionFormModel
+    {
+        public Guid? Id { get; set; }
+        public string? RoleCode { get; set; }
+        public bool CanView { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanSubmit { get; set; }
+        public bool CanAdvance { get; set; }
+        public string? ConditionExpr { get; set; }
+    }
+
+    private class FieldPolicyFormModel
+    {
+        public Guid? Id { get; set; }
+        public string? FieldKey { get; set; }
+        public string? RoleCode { get; set; }
+        public string? Access { get; set; }
+        public bool IsRequired { get; set; }
+        public string? ConditionExpr { get; set; }
+    }
+}

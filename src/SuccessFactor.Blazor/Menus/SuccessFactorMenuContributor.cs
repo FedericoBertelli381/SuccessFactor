@@ -68,6 +68,17 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
+        context.Menu.Items.Insert(
+            4,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.AdminWorkflow,
+                "Admin",
+                "/admin/workflow",
+                icon: "fas fa-sliders-h",
+                order: 5
+            )
+        );
+
         //Administration
         var administration = context.Menu.GetAdministration();
         administration.Order = 6;
