@@ -35,6 +35,39 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
+        context.Menu.Items.Insert(
+            1,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.My,
+                "My",
+                "/my",
+                icon: "fas fa-user",
+                order: 2
+            )
+        );
+
+        context.Menu.Items.Insert(
+            2,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.Team,
+                "Team",
+                "/team",
+                icon: "fas fa-users",
+                order: 3
+            )
+        );
+
+        context.Menu.Items.Insert(
+            3,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.Hr,
+                "HR",
+                "/hr",
+                icon: "fas fa-building",
+                order: 4
+            )
+        );
+
         //Administration
         var administration = context.Menu.GetAdministration();
         administration.Order = 6;

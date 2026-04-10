@@ -1,0 +1,238 @@
+@page "/hr"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Hr
+@inject IHrDashboardAppService HrDashboardAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>HR Dashboard</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">HR Dashboard</h2>
+
+            @if (_dashboard is not null && _dashboard.SelectedCycleId.HasValue)
+            {
+                <div class="text-muted">
+                    ciclo: @_dashboard.SelectedCycleName
+                    <span class="mx-2">•</span>
+                    status: <strong>@_dashboard.SelectedCycleStatus</strong>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary"
+                    @onclick="ReloadAsync"
+                    disabled="@_loading">
+                @if (_loading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Aggiorna
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">
+            @_error
+        </div>
+    }
+    else if (_loading && _dashboard is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento HR dashboard...</span>
+        </div>
+    }
+    else if (_dashboard is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Selezione ciclo</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_dashboard.Cycles.Count == 0)
+                        {
+                            <div class="text-muted">Nessun ciclo disponibile.</div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Ciclo</label>
+                                <select class="form-select"
+                                        value="@(_selectedCycleId?.ToString() ?? string.Empty)"
+                                        @onchange="OnCycleChangedAsync">
+                                    @foreach (var cycle in _dashboard.Cycles)
+                                    {
+                                        <option value="@cycle.CycleId">@cycle.CycleName (@cycle.CycleStatus)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="small text-muted">
+                                cicli disponibili: @_dashboard.Cycles.Count
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Riepilogo partecipanti</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Totali</div>
+                                <div class="fw-semibold">@_dashboard.TotalParticipants</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Active</div>
+                                <div>@_dashboard.ActiveParticipants</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Completed</div>
+                                <div>@_dashboard.CompletedParticipants</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <strong>Partecipanti del ciclo</strong>
+            </div>
+            <div class="card-body">
+                @if (_dashboard.Participants.Count == 0)
+                {
+                    <div class="text-muted">Nessun partecipante nel ciclo selezionato.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Dipendente</th>
+                                    <th>Matricola</th>
+                                    <th>Email</th>
+                                    <th>Status partecipazione</th>
+                                    <th>Fase corrente</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var participant in _dashboard.Participants)
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">@participant.FullName</td>
+                                        <td>@participant.Matricola</td>
+                                        <td>@(string.IsNullOrWhiteSpace(participant.Email) ? "-" : participant.Email)</td>
+                                        <td>
+                                            <span class="badge text-bg-light">@participant.ParticipantStatus</span>
+                                        </td>
+                                        <td>
+                                            <div>@(participant.CurrentPhaseCode ?? "-")</div>
+                                            <div class="small text-muted">@participant.CurrentPhaseName</div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private HrDashboardDto? _dashboard;
+    private Guid? _selectedCycleId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedCycleId = CycleId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _dashboard = await HrDashboardAppService.GetAsync(new GetHrDashboardInput
+            {
+                CycleId = _selectedCycleId
+            });
+
+            _selectedCycleId = _dashboard.SelectedCycleId;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnCycleChangedAsync(ChangeEventArgs e)
+    {
+        var rawValue = e.Value?.ToString();
+
+        if (!Guid.TryParse(rawValue, out var cycleId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedCycleId = cycleId;
+
+        var url = QueryHelpers.AddQueryString("/hr", "cycleId", cycleId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+        return Task.CompletedTask;
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+}
