@@ -1,0 +1,284 @@
+@page "/hr/assessments/{TargetEmployeeId:guid}/{AssessmentId:guid}"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Hr
+@using SuccessFactor.My.Dtos
+@inject IHrDashboardAppService HrDashboardAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>HR Assessment Detail</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">HR Assessment Detail</h2>
+
+            @if (_assessment is not null)
+            {
+                <div class="text-muted">
+                    @_assessment.AssessmentType
+                    <span class="mx-2">-</span>
+                    @_assessment.TargetEmployeeName
+                    <span class="mx-2">-</span>
+                    fase: <strong>@(_assessment.CurrentPhaseCode ?? "-")</strong>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="BackToHrPage">
+                Torna a HR
+            </button>
+
+            <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+                @if (_loading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Aggiorna
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">
+            @_error
+        </div>
+    }
+
+    @if (_loading && _assessment is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento assessment HR...</span>
+        </div>
+    }
+    else if (_assessment is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Contesto assessment</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Tipo</div>
+                                <div class="fw-semibold">@_assessment.AssessmentType</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Status</div>
+                                <div>@_assessment.Status</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Model</div>
+                                <div>@(_assessment.ModelName ?? "-")</div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Target</div>
+                                <div>@_assessment.TargetEmployeeName</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="text-muted small">Evaluator</div>
+                                <div>@_assessment.EvaluatorEmployeeName</div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Score range</div>
+                                <div>@_assessment.MinScore - @_assessment.MaxScore</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Items</div>
+                                <div>@_assessment.ItemsCount</div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Required mancanti</div>
+                                <div>@_assessment.MissingRequiredCount</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Permessi workflow</strong>
+                        <span class="badge text-bg-light">Read only</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            Edit: <strong>@YesNo(_assessment.CanEdit)</strong>
+                        </div>
+                        <div class="mb-2">
+                            Submit: <strong>@YesNo(_assessment.CanSubmit)</strong>
+                        </div>
+                        <div class="small text-muted">
+                            Score: @_assessment.ScoreAccess
+                            <br />
+                            Comment: @_assessment.CommentAccess
+                            <br />
+                            Evidence: @_assessment.EvidenceAttachmentAccess
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Competenze</strong>
+                <span class="badge text-bg-light">Read only</span>
+            </div>
+            <div class="card-body">
+                @if (_assessment.Items.Count == 0)
+                {
+                    <div class="text-muted">Nessun item da visualizzare.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Competenza</th>
+                                    <th class="text-center">Required</th>
+                                    <th class="text-end">Peso</th>
+                                    <th class="text-center">Score</th>
+                                    <th>Comment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _assessment.Items)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@item.CompetencyName</div>
+                                            <div class="small text-muted">@item.CompetencyCode</div>
+                                        </td>
+                                        <td class="text-center">
+                                            @if (item.IsRequired)
+                                            {
+                                                <span class="badge text-bg-warning">Required</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">No</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">@FormatDecimal(item.Weight)</td>
+                                        <td class="text-center">@(item.Score?.ToString() ?? "-")</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Comment) ? "-" : item.Comment)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid TargetEmployeeId { get; set; }
+
+    [Parameter]
+    public Guid AssessmentId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private MyAssessmentItemDto? _assessment;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var dashboard = await HrDashboardAppService.GetAsync(new GetHrDashboardInput
+            {
+                CycleId = CycleId,
+                TargetEmployeeId = TargetEmployeeId
+            });
+
+            _assessment = dashboard.Assessments?.Items.FirstOrDefault(x => x.AssessmentId == AssessmentId);
+
+            if (_assessment is null)
+            {
+                _error = "Assessment non trovato tra quelli del target selezionato.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void BackToHrPage()
+    {
+        NavigationManager.NavigateTo(BuildHrUrl());
+    }
+
+    private string BuildHrUrl()
+    {
+        var query = new System.Collections.Generic.Dictionary<string, string?>
+        {
+            ["targetEmployeeId"] = TargetEmployeeId.ToString()
+        };
+
+        if (CycleId.HasValue)
+        {
+            query["cycleId"] = CycleId.Value.ToString();
+        }
+
+        var tenant = GetCurrentTenantFromUrl();
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            query["__tenant"] = tenant;
+        }
+
+        return QueryHelpers.AddQueryString("/hr", query!);
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string YesNo(bool value) => value ? "Si" : "No";
+
+    private static string FormatDecimal(decimal? value)
+        => value?.ToString("0.##") ?? "-";
+}

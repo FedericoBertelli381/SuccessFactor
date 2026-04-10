@@ -215,6 +215,7 @@
                                         <th>Due date</th>
                                         <th>Ultimo avanzamento</th>
                                         <th>Ultima nota</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -237,6 +238,12 @@
                                                 }
                                             </td>
                                             <td>@(string.IsNullOrWhiteSpace(goal.LastProgress?.Note) ? "-" : goal.LastProgress!.Note)</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => OpenGoalDetail(goal.AssignmentId)">
+                                                    Apri detail
+                                                </button>
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>
@@ -314,6 +321,13 @@
                                         </table>
                                     </div>
                                 }
+
+                                <div class="d-flex justify-content-end mt-3">
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                            @onclick="() => OpenAssessmentDetail(assessment.AssessmentId)">
+                                        Apri detail
+                                    </button>
+                                </div>
                             </div>
                         }
                     }
@@ -421,6 +435,45 @@
         }
 
         return QueryHelpers.AddQueryString("/hr", query!);
+    }
+
+    private void OpenGoalDetail(Guid assignmentId)
+    {
+        if (!_selectedEmployeeId.HasValue)
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo(BuildHrDetailUrl($"/hr/goals/{_selectedEmployeeId.Value}/{assignmentId}"));
+    }
+
+    private void OpenAssessmentDetail(Guid assessmentId)
+    {
+        if (!_selectedEmployeeId.HasValue)
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo(BuildHrDetailUrl($"/hr/assessments/{_selectedEmployeeId.Value}/{assessmentId}"));
+    }
+
+    private string BuildHrDetailUrl(string basePath)
+    {
+        var query = new System.Collections.Generic.Dictionary<string, string?>();
+
+        if (_selectedCycleId.HasValue)
+        {
+            query["cycleId"] = _selectedCycleId.Value.ToString();
+        }
+
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            query["__tenant"] = tenant;
+        }
+
+        return QueryHelpers.AddQueryString(basePath, query!);
     }
 
     private string? GetCurrentTenantFromUrl()
