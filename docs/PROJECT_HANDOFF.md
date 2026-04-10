@@ -508,3 +508,5 @@ Le prossime modifiche devono essere evolutive, non rivoluzionarie.
 - step 14.3 completato: polish UX/error handling
 STEP 15 completato: polish UX del detail assessment manager
 STEP 16 completato: primo HR flow base
+STEP 17 completato: HR target flow read-only con cambio ciclo e selezione dipendente
+Descrizione: la dashboard HR permette di cambiare ciclo, selezionare un dipendente del ciclo e visualizzare in sola lettura goals e assessments del target, mantenendo il tenant in query string e senza toccare i flow My* e Team*.
