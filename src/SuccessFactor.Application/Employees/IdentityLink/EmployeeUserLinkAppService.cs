@@ -9,7 +9,7 @@ using SuccessFactor.Employees;
 
 namespace SuccessFactor.Employees.IdentityLink;
 
-public class EmployeeUserLinkAppService : ApplicationService
+public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkAppService
 {
     private readonly IRepository<Employee, Guid> _employeeRepo;
     private readonly IRepository<IdentityUser, Guid> _userRepo;
@@ -67,6 +67,42 @@ public class EmployeeUserLinkAppService : ApplicationService
             Matricola = e.Matricola,
             FullName = e.FullName,
             Email = e.Email
+        }).ToArray();
+    }
+
+    public async Task<LinkedEmployeeDto[]> GetLinkedEmployeesAsync(int maxResultCount = 100)
+    {
+        EnsureTenant();
+
+        var employeeQuery = await _employeeRepo.GetQueryableAsync();
+        var userQuery = await _userRepo.GetQueryableAsync();
+
+        var list = await AsyncExecuter.ToListAsync(
+            (from employee in employeeQuery
+             join user in userQuery on employee.UserId equals user.Id
+             where employee.UserId != null
+             orderby employee.Matricola
+             select new
+             {
+                 employee.Id,
+                 employee.UserId,
+                 employee.Matricola,
+                 employee.FullName,
+                 EmployeeEmail = employee.Email,
+                 UserName = user.UserName,
+                 UserEmail = user.Email
+             })
+            .Take(maxResultCount));
+
+        return list.Select(x => new LinkedEmployeeDto
+        {
+            EmployeeId = x.Id,
+            UserId = x.UserId!.Value,
+            Matricola = x.Matricola,
+            FullName = x.FullName,
+            EmployeeEmail = x.EmployeeEmail,
+            UserName = x.UserName ?? string.Empty,
+            UserEmail = x.UserEmail
         }).ToArray();
     }
 

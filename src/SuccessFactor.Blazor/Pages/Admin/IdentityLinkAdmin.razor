@@ -1,0 +1,399 @@
+@page "/admin/identity-link"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Employees.IdentityLink
+@inject IEmployeeUserLinkAppService EmployeeUserLinkAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Identity Link Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Identity Link Admin</h2>
+            <div class="text-muted">Collega utenti ABP ai dipendenti del tenant senza script SQL.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _unlinkedEmployees.Count == 0 && _linkedEmployees.Count == 0)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento mapping identity...</span>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Employee da collegare</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_unlinkedEmployees.Count == 0)
+                        {
+                            <div class="text-muted">Nessun employee non collegato.</div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Employee</label>
+                                <select class="form-select"
+                                        value="@(_selectedEmployeeId?.ToString() ?? string.Empty)"
+                                        @onchange="OnEmployeeChanged">
+                                    <option value="">Seleziona un employee</option>
+                                    @foreach (var employee in _unlinkedEmployees)
+                                    {
+                                        <option value="@employee.EmployeeId">@employee.Matricola - @employee.FullName</option>
+                                    }
+                                </select>
+                            </div>
+
+                            @if (SelectedEmployee is not null)
+                            {
+                                <div class="border rounded p-3 mb-3">
+                                    <div class="fw-semibold">@SelectedEmployee.FullName</div>
+                                    <div class="small text-muted">matricola: @SelectedEmployee.Matricola</div>
+                                    <div class="small text-muted">email: @(string.IsNullOrWhiteSpace(SelectedEmployee.Email) ? "-" : SelectedEmployee.Email)</div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button class="btn btn-outline-primary"
+                                            @onclick="LinkSelectedEmployeeByEmailAsync"
+                                            disabled="@_linking">
+                                        Link by email
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Ricerca utenti ABP</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-8">
+                                <label class="form-label">Filtro</label>
+                                <input class="form-control" @bind="_userSearch" />
+                            </div>
+                            <div class="col-12 col-md-4 d-flex align-items-end">
+                                <button class="btn btn-outline-secondary w-100"
+                                        @onclick="SearchUsersAsync"
+                                        disabled="@_searchingUsers">
+                                    Cerca utenti
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (_userResults.Count == 0)
+                        {
+                            <div class="text-muted">Nessun utente caricato. Usa la ricerca sopra.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>UserName</th>
+                                            <th>Email</th>
+                                            <th>Nome</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var user in _userResults)
+                                        {
+                                            <tr class="@(_selectedUserId == user.Id ? "table-primary" : null)">
+                                                <td class="fw-semibold">@user.UserName</td>
+                                                <td>@(string.IsNullOrWhiteSpace(user.Email) ? "-" : user.Email)</td>
+                                                <td>@($"{user.Name} {user.Surname}".Trim())</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-outline-secondary"
+                                                            @onclick="() => SelectUser(user.Id)">
+                                                        Seleziona
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button class="btn btn-primary"
+                                    @onclick="LinkSelectedAsync"
+                                    disabled="@(_linking || !CanLinkSelected())">
+                                Collega employee e utente
+                            </button>
+                            <button class="btn btn-outline-secondary"
+                                    @onclick="ResetSelection">
+                                Pulisci selezione
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Employee gia collegati</strong>
+                <span class="badge text-bg-light">@_linkedEmployees.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_linkedEmployees.Count == 0)
+                {
+                    <div class="text-muted">Nessun employee collegato.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Matricola</th>
+                                    <th>Employee</th>
+                                    <th>Email employee</th>
+                                    <th>UserName</th>
+                                    <th>Email utente</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _linkedEmployees)
+                                {
+                                    <tr>
+                                        <td>@item.Matricola</td>
+                                        <td class="fw-semibold">@item.FullName</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.EmployeeEmail) ? "-" : item.EmployeeEmail)</td>
+                                        <td>@item.UserName</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.UserEmail) ? "-" : item.UserEmail)</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => UnlinkAsync(item.EmployeeId)"
+                                                    disabled="@_linking">
+                                                Scollega
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _linking;
+    private bool _searchingUsers;
+    private string? _error;
+    private string? _successMessage;
+    private string? _userSearch;
+    private Guid? _selectedEmployeeId;
+    private Guid? _selectedUserId;
+    private List<UnlinkedEmployeeDto> _unlinkedEmployees = [];
+    private List<LinkedEmployeeDto> _linkedEmployees = [];
+    private List<IdentityUserLookupDto> _userResults = [];
+
+    private UnlinkedEmployeeDto? SelectedEmployee => _unlinkedEmployees.FirstOrDefault(x => x.EmployeeId == _selectedEmployeeId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _unlinkedEmployees = (await EmployeeUserLinkAppService.GetUnlinkedEmployeesAsync()).ToList();
+            _linkedEmployees = (await EmployeeUserLinkAppService.GetLinkedEmployeesAsync()).ToList();
+
+            if (_selectedEmployeeId.HasValue && _unlinkedEmployees.All(x => x.EmployeeId != _selectedEmployeeId.Value))
+            {
+                _selectedEmployeeId = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnEmployeeChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var employeeId))
+        {
+            _selectedEmployeeId = employeeId;
+            return;
+        }
+
+        _selectedEmployeeId = null;
+    }
+
+    private async Task SearchUsersAsync()
+    {
+        _searchingUsers = true;
+        _error = null;
+
+        try
+        {
+            _userResults = (await EmployeeUserLinkAppService.SearchUsersAsync(_userSearch, 30)).ToList();
+
+            if (_selectedUserId.HasValue && _userResults.All(x => x.Id != _selectedUserId.Value))
+            {
+                _selectedUserId = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _searchingUsers = false;
+        }
+    }
+
+    private void SelectUser(Guid userId)
+    {
+        _selectedUserId = userId;
+    }
+
+    private async Task LinkSelectedAsync()
+    {
+        if (!CanLinkSelected())
+        {
+            return;
+        }
+
+        _linking = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await EmployeeUserLinkAppService.LinkAsync(new LinkEmployeeUserDto
+            {
+                EmployeeId = _selectedEmployeeId!.Value,
+                UserId = _selectedUserId!.Value
+            });
+
+            _successMessage = "Employee e utente collegati correttamente.";
+            ResetSelection();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _linking = false;
+        }
+    }
+
+    private async Task LinkSelectedEmployeeByEmailAsync()
+    {
+        if (!_selectedEmployeeId.HasValue)
+        {
+            return;
+        }
+
+        _linking = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var linked = await EmployeeUserLinkAppService.LinkByEmailAsync(_selectedEmployeeId.Value);
+            _successMessage = linked
+                ? "Employee collegato correttamente tramite email."
+                : "Nessun utente trovato con la stessa email dell'employee.";
+
+            ResetSelection();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _linking = false;
+        }
+    }
+
+    private async Task UnlinkAsync(Guid employeeId)
+    {
+        _linking = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await EmployeeUserLinkAppService.UnlinkAsync(employeeId);
+            _successMessage = "Collegamento rimosso correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _linking = false;
+        }
+    }
+
+    private bool CanLinkSelected()
+        => _selectedEmployeeId.HasValue && _selectedUserId.HasValue;
+
+    private void ResetSelection()
+    {
+        _selectedEmployeeId = null;
+        _selectedUserId = null;
+    }
+}

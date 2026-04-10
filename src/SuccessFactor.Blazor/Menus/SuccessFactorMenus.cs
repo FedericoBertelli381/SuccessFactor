@@ -8,6 +8,8 @@ public class SuccessFactorMenus
     public const string Team = Prefix + ".Team";
     public const string Hr = Prefix + ".Hr";
     public const string AdminWorkflow = Prefix + ".AdminWorkflow";
+    public const string AdminIdentityLink = Prefix + ".AdminIdentityLink";
+    public const string AdminEmployees = Prefix + ".AdminEmployees";
 
     //Add your menu items here...
 

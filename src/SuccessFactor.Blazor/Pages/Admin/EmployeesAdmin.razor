@@ -1,0 +1,316 @@
+@page "/admin/employees"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Admin
+@using SuccessFactor.Employees
+@inject IEmployeeAdminAppService EmployeeAdminAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Employees Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Employees Admin</h2>
+            <div class="text-muted">Crea e modifica i dipendenti del tenant. Il link utente si gestisce nella pagina Admin Users.</div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+                @if (_loading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Aggiorna
+            </button>
+
+            <button class="btn btn-outline-secondary" @onclick="GoToIdentityLinkPage">
+                Vai a Admin Users
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento employee admin...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.EmployeeId.HasValue ? "Modifica employee" : "Nuovo employee")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Matricola</label>
+                                    <InputText class="form-control" @bind-Value="_form.Matricola" />
+                                </div>
+                                <div class="col-12 col-md-8">
+                                    <label class="form-label">FullName</label>
+                                    <InputText class="form-control" @bind-Value="_form.FullName" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Email</label>
+                                    <InputText class="form-control" @bind-Value="_form.Email" />
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">OrgUnit</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.OrgUnitId">
+                                        <option value="">-</option>
+                                        @foreach (var item in _data.OrgUnits)
+                                        {
+                                            <option value="@item.Id.ToString()">@item.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">JobRole</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.JobRoleId">
+                                        <option value="">-</option>
+                                        @foreach (var item in _data.JobRoles)
+                                        {
+                                            <option value="@item.Id.ToString()">@item.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label d-block">IsActive</label>
+                                    <InputCheckbox class="form-check-input" @bind-Value="_form.IsActive" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva employee
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Employees</strong>
+                        <span class="badge text-bg-light">@_data.Employees.Count</span>
+                    </div>
+                    <div class="card-body">
+                        @if (_data.Employees.Count == 0)
+                        {
+                            <div class="text-muted">Nessun employee presente.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Matricola</th>
+                                            <th>FullName</th>
+                                            <th>Email</th>
+                                            <th>OrgUnit</th>
+                                            <th>JobRole</th>
+                                            <th>Attivo</th>
+                                            <th>Utente</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _data.Employees)
+                                        {
+                                            <tr class="@(_form.EmployeeId == item.EmployeeId ? "table-primary" : null)">
+                                                <td>@item.Matricola</td>
+                                                <td class="fw-semibold">@item.FullName</td>
+                                                <td>@(string.IsNullOrWhiteSpace(item.Email) ? "-" : item.Email)</td>
+                                                <td>@(string.IsNullOrWhiteSpace(item.OrgUnitName) ? "-" : item.OrgUnitName)</td>
+                                                <td>@(string.IsNullOrWhiteSpace(item.JobRoleName) ? "-" : item.JobRoleName)</td>
+                                                <td>@YesNo(item.IsActive)</td>
+                                                <td>@(item.UserId.HasValue ? "Linked" : "Unlinked")</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-outline-secondary"
+                                                            @onclick="() => Edit(item)">
+                                                        Modifica
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private EmployeeAdminDto? _data;
+    private EmployeeFormModel _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await EmployeeAdminAppService.GetAsync();
+
+            if (!_form.EmployeeId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await EmployeeAdminAppService.SaveAsync(_form.EmployeeId, new CreateUpdateEmployeeDto
+            {
+                Matricola = _form.Matricola ?? string.Empty,
+                FullName = _form.FullName ?? string.Empty,
+                Email = _form.Email,
+                OrgUnitId = _form.OrgUnitId,
+                JobRoleId = _form.JobRoleId,
+                IsActive = _form.IsActive
+            });
+
+            _successMessage = _form.EmployeeId.HasValue
+                ? "Employee aggiornato correttamente."
+                : "Employee creato correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Edit(EmployeeAdminListItemDto item)
+    {
+        _form = new EmployeeFormModel
+        {
+            EmployeeId = item.EmployeeId,
+            Matricola = item.Matricola,
+            FullName = item.FullName,
+            Email = item.Email,
+            OrgUnitId = item.OrgUnitId?.ToString(),
+            JobRoleId = item.JobRoleId?.ToString(),
+            IsActive = item.IsActive
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new EmployeeFormModel
+        {
+            IsActive = true
+        };
+    }
+
+    private void GoToIdentityLinkPage()
+    {
+        var tenant = GetCurrentTenantFromUrl();
+        var url = "/admin/identity-link";
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string YesNo(bool value) => value ? "Si" : "No";
+
+    private class EmployeeFormModel
+    {
+        public Guid? EmployeeId { get; set; }
+        public string? Matricola { get; set; }
+        public string? FullName { get; set; }
+        public string? Email { get; set; }
+        public string? OrgUnitId { get; set; }
+        public string? JobRoleId { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+}

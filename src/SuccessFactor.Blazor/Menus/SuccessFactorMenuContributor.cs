@@ -72,16 +72,38 @@ public class SuccessFactorMenuContributor : IMenuContributor
             4,
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminWorkflow,
-                "Admin",
+                "Admin Workflow",
                 "/admin/workflow",
                 icon: "fas fa-sliders-h",
                 order: 5
             )
         );
 
+        context.Menu.Items.Insert(
+            5,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.AdminEmployees,
+                "Admin Employees",
+                "/admin/employees",
+                icon: "fas fa-id-badge",
+                order: 6
+            )
+        );
+
+        context.Menu.Items.Insert(
+            6,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.AdminIdentityLink,
+                "Admin Users",
+                "/admin/identity-link",
+                icon: "fas fa-user-link",
+                order: 7
+            )
+        );
+
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 6;
+        administration.Order = 8;
     
         if (MultiTenancyConsts.IsEnabled)
         {
