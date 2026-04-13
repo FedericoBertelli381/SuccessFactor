@@ -9,4 +9,5 @@ public interface IEmployeeAdminAppService : IApplicationService
 {
     Task<EmployeeAdminDto> GetAsync();
     Task<EmployeeAdminListItemDto> SaveAsync(Guid? id, CreateUpdateEmployeeDto input);
+    Task<EmployeeImportResultDto> ImportAsync(ImportEmployeesInput input);
 }
