@@ -39,7 +39,7 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
 
     public async Task<EmployeeAdminDto> GetAsync()
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
 
         var employeeQuery = await _employeeRepository.GetQueryableAsync();
         var employees = await _asyncExecuter.ToListAsync(
@@ -92,7 +92,7 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
 
     public async Task<EmployeeAdminListItemDto> SaveAsync(Guid? id, CreateUpdateEmployeeDto input)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
         input.Matricola = NormalizeRequired(input.Matricola, "Matricola");
         input.FullName = NormalizeRequired(input.FullName, "FullName");
         input.Email = NormalizeNullable(input.Email);
@@ -110,7 +110,10 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
         }
         else
         {
-            entity = new Employee();
+            entity = new Employee
+            {
+                TenantId = CurrentTenant.Id
+            };
         }
 
         entity.Matricola = input.Matricola;
@@ -149,7 +152,7 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
 
     public async Task<EmployeeImportResultDto> ImportAsync(ImportEmployeesInput input)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
 
         if (input is null || string.IsNullOrWhiteSpace(input.Content))
         {
@@ -212,7 +215,10 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
         {
             var isUpdate = existingByMatricola.TryGetValue(row.Matricola, out var entity);
 
-            entity ??= new Employee();
+            entity ??= new Employee
+            {
+                TenantId = CurrentTenant.Id
+            };
             entity.Matricola = row.Matricola;
             entity.FullName = row.FullName;
             entity.Email = row.Email;
@@ -236,8 +242,13 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
         return result;
     }
 
-    private void EnsureCurrentUserIsAdmin()
+    private void EnsureTenantAndAdmin()
     {
+        if (CurrentTenant.Id is null)
+        {
+            throw new BusinessException("TenantMissing");
+        }
+
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
         if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))

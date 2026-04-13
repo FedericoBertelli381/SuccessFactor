@@ -41,7 +41,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
 
     public async Task<WorkflowAdminDto> GetAsync(GetWorkflowAdminInput input)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
         input ??= new GetWorkflowAdminInput();
 
         var templateQuery = await _templateRepository.GetQueryableAsync();
@@ -118,7 +118,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
 
     public async Task<PhaseRolePermissionDto> SaveRolePermissionAsync(Guid? id, CreateUpdatePhaseRolePermissionDto input)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
         await EnsureTemplateAndPhaseAsync(input.TemplateId, input.PhaseId);
         input.RoleCode = NormalizeRoleCode(input.RoleCode);
 
@@ -158,13 +158,13 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
 
     public async Task DeleteRolePermissionAsync(Guid id)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
         await _rolePermissionRepository.DeleteAsync(id);
     }
 
     public async Task<PhaseFieldPolicyDto> SaveFieldPolicyAsync(Guid? id, CreateUpdatePhaseFieldPolicyDto input)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
         await EnsureTemplateAndPhaseAsync(input.TemplateId, input.PhaseId);
         input.RoleCode = NormalizeRoleCode(input.RoleCode);
         input.FieldKey = NormalizeRequired(input.FieldKey, "FieldKey");
@@ -204,12 +204,17 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
 
     public async Task DeleteFieldPolicyAsync(Guid id)
     {
-        EnsureCurrentUserIsAdmin();
+        EnsureTenantAndAdmin();
         await _fieldPolicyRepository.DeleteAsync(id);
     }
 
-    private void EnsureCurrentUserIsAdmin()
+    private void EnsureTenantAndAdmin()
     {
+        if (CurrentTenant.Id is null)
+        {
+            throw new BusinessException("TenantMissing");
+        }
+
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
         if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))

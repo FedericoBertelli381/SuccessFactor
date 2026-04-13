@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -9,6 +10,7 @@ using SuccessFactor.Employees;
 
 namespace SuccessFactor.Employees.IdentityLink;
 
+[Authorize]
 public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkAppService
 {
     private readonly IRepository<Employee, Guid> _employeeRepo;
@@ -22,7 +24,8 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
     public async Task<IdentityUserLookupDto[]> SearchUsersAsync(string? filter = null, int maxResultCount = 20)
     {
-        EnsureTenant();
+        EnsureTenantAndAdmin();
+        maxResultCount = Math.Clamp(maxResultCount, 1, 100);
 
         var q = await _userRepo.GetQueryableAsync();
 
@@ -51,7 +54,8 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
     public async Task<UnlinkedEmployeeDto[]> GetUnlinkedEmployeesAsync(int maxResultCount = 50)
     {
-        EnsureTenant();
+        EnsureTenantAndAdmin();
+        maxResultCount = Math.Clamp(maxResultCount, 1, 200);
 
         var q = await _employeeRepo.GetQueryableAsync();
 
@@ -72,7 +76,8 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
     public async Task<LinkedEmployeeDto[]> GetLinkedEmployeesAsync(int maxResultCount = 100)
     {
-        EnsureTenant();
+        EnsureTenantAndAdmin();
+        maxResultCount = Math.Clamp(maxResultCount, 1, 500);
 
         var employeeQuery = await _employeeRepo.GetQueryableAsync();
         var userQuery = await _userRepo.GetQueryableAsync();
@@ -108,7 +113,7 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
     public async Task LinkAsync(LinkEmployeeUserDto input)
     {
-        EnsureTenant();
+        EnsureTenantAndAdmin();
 
         var emp = await _employeeRepo.GetAsync(input.EmployeeId);
 
@@ -134,7 +139,7 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
     public async Task UnlinkAsync(Guid employeeId)
     {
-        EnsureTenant();
+        EnsureTenantAndAdmin();
 
         var emp = await _employeeRepo.GetAsync(employeeId);
         emp.UserId = null;
@@ -144,7 +149,7 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
     // opzionale: link automatico per email (molto comodo)
     public async Task<bool> LinkByEmailAsync(Guid employeeId)
     {
-        EnsureTenant();
+        EnsureTenantAndAdmin();
 
         var emp = await _employeeRepo.GetAsync(employeeId);
         if (string.IsNullOrWhiteSpace(emp.Email))
@@ -161,10 +166,17 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
         return true;
     }
 
-    private void EnsureTenant()
+    private void EnsureTenantAndAdmin()
     {
         if (CurrentTenant.Id == null)
             throw new BusinessException("TenantMissing")
                 .WithData("Hint", "Aggiungi ?__tenant=NOME_TENANT alla chiamata e lavora nel tenant corretto.");
+
+        var roles = CurrentUser.Roles ?? Array.Empty<string>();
+
+        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new BusinessException("CurrentUserIsNotAdmin");
+        }
     }
 }
