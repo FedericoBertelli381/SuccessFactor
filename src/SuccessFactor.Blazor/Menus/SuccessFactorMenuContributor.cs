@@ -71,10 +71,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             4,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminWorkflow,
-                "Admin Workflow",
-                "/admin/workflow",
-                icon: "fas fa-sliders-h",
+                SuccessFactorMenus.AdminCycles,
+                "Admin Cycles",
+                "/admin/cycles",
+                icon: "fas fa-calendar-alt",
                 order: 5
             )
         );
@@ -82,10 +82,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             5,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminEmployees,
-                "Admin Employees",
-                "/admin/employees",
-                icon: "fas fa-id-badge",
+                SuccessFactorMenus.AdminWorkflow,
+                "Admin Workflow",
+                "/admin/workflow",
+                icon: "fas fa-sliders-h",
                 order: 6
             )
         );
@@ -93,17 +93,28 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             6,
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminEmployees,
+                "Admin Employees",
+                "/admin/employees",
+                icon: "fas fa-id-badge",
+                order: 7
+            )
+        );
+
+        context.Menu.Items.Insert(
+            7,
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 7
+                order: 8
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 8;
+        administration.Order = 9;
     
         if (MultiTenancyConsts.IsEnabled)
         {

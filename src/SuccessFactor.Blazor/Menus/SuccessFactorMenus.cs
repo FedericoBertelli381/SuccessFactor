@@ -10,6 +10,7 @@ public class SuccessFactorMenus
     public const string AdminWorkflow = Prefix + ".AdminWorkflow";
     public const string AdminIdentityLink = Prefix + ".AdminIdentityLink";
     public const string AdminEmployees = Prefix + ".AdminEmployees";
+    public const string AdminCycles = Prefix + ".AdminCycles";
 
     //Add your menu items here...
 

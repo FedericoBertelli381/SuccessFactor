@@ -1,0 +1,333 @@
+@page "/admin/cycles"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using SuccessFactor.Admin
+@using SuccessFactor.Cycles
+@inject IAdminCycleAppService AdminCycleAppService
+
+<PageTitle>Cycles Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Cycles Admin</h2>
+            <div class="text-muted">Gestione base dei cicli performance del tenant.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento cycles admin...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.CycleId.HasValue ? "Modifica ciclo" : "Nuovo ciclo")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-8">
+                                    <label class="form-label">Nome</label>
+                                    <InputText class="form-control" @bind-Value="_form.Name" />
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Anno</label>
+                                    <InputNumber class="form-control" @bind-Value="_form.CycleYear" />
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">Template</label>
+                                    <select class="form-select"
+                                            value="@(_form.TemplateId ?? string.Empty)"
+                                            @onchange="OnTemplateChangedAsync">
+                                        <option value="">Seleziona template</option>
+                                        @foreach (var template in _data.Templates)
+                                        {
+                                            <option value="@template.TemplateId.ToString()">@template.TemplateName (v@template.Version)</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">Current phase</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.CurrentPhaseId">
+                                        <option value="">-</option>
+                                        @foreach (var phase in GetPhasesForSelectedTemplate())
+                                        {
+                                            <option value="@phase.PhaseId.ToString()">@phase.PhaseOrder - @phase.PhaseCode - @phase.PhaseName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Status</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.Status">
+                                        <option value="Draft">Draft</option>
+                                        <option value="Active">Active</option>
+                                        <option value="Closed">Closed</option>
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Start date</label>
+                                    <InputDate class="form-control" @bind-Value="_form.StartDate" />
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">End date</label>
+                                    <InputDate class="form-control" @bind-Value="_form.EndDate" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva ciclo
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Cicli</strong>
+                        <span class="badge text-bg-light">@_data.Cycles.Count</span>
+                    </div>
+                    <div class="card-body">
+                        @if (_data.Cycles.Count == 0)
+                        {
+                            <div class="text-muted">Nessun ciclo presente.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Anno</th>
+                                            <th>Template</th>
+                                            <th>Fase</th>
+                                            <th>Status</th>
+                                            <th>Date</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _data.Cycles)
+                                        {
+                                            <tr class="@(_form.CycleId == item.CycleId ? "table-primary" : null)">
+                                                <td class="fw-semibold">@item.Name</td>
+                                                <td>@item.CycleYear</td>
+                                                <td>@(string.IsNullOrWhiteSpace(item.TemplateName) ? "-" : item.TemplateName)</td>
+                                                <td>
+                                                    <div>@(item.CurrentPhaseCode ?? "-")</div>
+                                                    <div class="small text-muted">@item.CurrentPhaseName</div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge text-bg-light">@item.Status</span>
+                                                </td>
+                                                <td>@FormatDateRange(item.StartDate, item.EndDate)</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">
+                                                        Modifica
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private CycleAdminDto? _data;
+    private CycleFormModel _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminCycleAppService.GetAsync(ParseGuidOrNull(_form.TemplateId));
+
+            if (!_form.CycleId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCycleAppService.SaveAsync(_form.CycleId, new CreateUpdateCycleDto
+            {
+                Name = _form.Name ?? string.Empty,
+                CycleYear = _form.CycleYear,
+                TemplateId = ParseGuidOrNull(_form.TemplateId) ?? Guid.Empty,
+                CurrentPhaseId = ParseGuidOrNull(_form.CurrentPhaseId),
+                Status = _form.Status ?? "Draft",
+                StartDate = _form.StartDate,
+                EndDate = _form.EndDate
+            });
+
+            _successMessage = _form.CycleId.HasValue
+                ? "Ciclo aggiornato correttamente."
+                : "Ciclo creato correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OnTemplateChangedAsync(ChangeEventArgs e)
+    {
+        _form.TemplateId = e.Value?.ToString();
+        _form.CurrentPhaseId = null;
+
+        if (_data is not null)
+        {
+            _data = await AdminCycleAppService.GetAsync(ParseGuidOrNull(_form.TemplateId));
+        }
+    }
+
+    private void Edit(CycleAdminListItemDto item)
+    {
+        _form = new CycleFormModel
+        {
+            CycleId = item.CycleId,
+            Name = item.Name,
+            CycleYear = item.CycleYear,
+            TemplateId = item.TemplateId.ToString(),
+            CurrentPhaseId = item.CurrentPhaseId?.ToString(),
+            Status = item.Status,
+            StartDate = item.StartDate,
+            EndDate = item.EndDate
+        };
+    }
+
+    private void ResetForm()
+    {
+        var defaultTemplate = _data?.Templates.FirstOrDefault(x => x.IsDefault) ?? _data?.Templates.FirstOrDefault();
+
+        _form = new CycleFormModel
+        {
+            CycleYear = DateTime.Today.Year,
+            Status = "Draft",
+            TemplateId = defaultTemplate?.TemplateId.ToString()
+        };
+    }
+
+    private List<WorkflowPhaseLookupDto> GetPhasesForSelectedTemplate()
+    {
+        var selectedTemplateId = ParseGuidOrNull(_form.TemplateId);
+
+        return _data?.Phases
+            .Where(x => !selectedTemplateId.HasValue || x.TemplateId == selectedTemplateId.Value)
+            .OrderBy(x => x.PhaseOrder)
+            .ThenBy(x => x.PhaseCode)
+            .ToList()
+            ?? [];
+    }
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string FormatDateRange(DateOnly? startDate, DateOnly? endDate)
+        => $"{FormatDate(startDate)} - {FormatDate(endDate)}";
+
+    private static string FormatDate(DateOnly? value)
+        => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private class CycleFormModel
+    {
+        public Guid? CycleId { get; set; }
+        public string? Name { get; set; }
+        public int CycleYear { get; set; } = DateTime.Today.Year;
+        public string? TemplateId { get; set; }
+        public string? CurrentPhaseId { get; set; }
+        public string? Status { get; set; } = "Draft";
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? EndDate { get; set; }
+    }
+}

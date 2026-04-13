@@ -82,6 +82,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         dto.Phases = phases.Select(x => new WorkflowPhaseLookupDto
         {
             PhaseId = x.Id,
+            TemplateId = x.TemplateId,
             PhaseCode = x.Code,
             PhaseName = x.Name,
             PhaseOrder = x.PhaseOrder,
