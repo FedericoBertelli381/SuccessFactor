@@ -52,23 +52,9 @@ Include:
 - STEP 27 completato: manager relation admin base.
 - STEP 28 completato: import esteso setup performance.
 - STEP 29 completato: final hardening e deploy rehearsal base.
+- STEP 30 completato: OrgUnit admin management base.
 
 ## Prossimo step consigliato
-
-### STEP 30 - OrgUnit admin management
-
-Obiettivo:
-- gestire da UI le unita organizzative.
-- rendere visibile e modificabile la struttura `OrgUnits`.
-
-Include:
-- lista OrgUnits.
-- create/edit OrgUnit.
-- parent OrgUnit.
-- validazione anti-loop sulla gerarchia.
-- disattivazione soft o blocco delete se referenziata.
-
-## Step successivi
 
 ### STEP 31 - JobRole admin management
 

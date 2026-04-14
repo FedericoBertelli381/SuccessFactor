@@ -1,0 +1,325 @@
+@page "/admin/org-units"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using SuccessFactor.Admin
+@inject IAdminOrgUnitAppService AdminOrgUnitAppService
+
+<PageTitle>OrgUnits Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">OrgUnits Admin</h2>
+            <div class="text-muted">Gestione base della struttura organizzativa del tenant.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento OrgUnits...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.OrgUnitId.HasValue ? "Modifica OrgUnit" : "Nuova OrgUnit")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuova</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Nome</label>
+                                    <InputText class="form-control" @bind-Value="_form.Name" />
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">Parent OrgUnit</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.ParentOrgUnitId">
+                                        <option value="">Root / nessun parent</option>
+                                        @foreach (var orgUnit in GetParentCandidates())
+                                        {
+                                            <option value="@orgUnit.OrgUnitId.ToString()">@FormatOrgUnitOption(orgUnit)</option>
+                                        }
+                                    </InputSelect>
+                                    <div class="form-text">Il server blocca parent non validi e loop gerarchici.</div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva OrgUnit
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>OrgUnits</strong>
+                        <span class="badge text-bg-light">@_data.OrgUnits.Count</span>
+                    </div>
+                    <div class="card-body">
+                        @if (_data.OrgUnits.Count == 0)
+                        {
+                            <div class="text-muted">Nessuna OrgUnit presente.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Parent</th>
+                                            <th>Figli</th>
+                                            <th>Employee</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _data.OrgUnits)
+                                        {
+                                            <tr class="@(_form.OrgUnitId == item.OrgUnitId ? "table-primary" : null)">
+                                                <td>
+                                                    <div class="fw-semibold" style="padding-left: @(item.Level * 1.25)rem">
+                                                        @if (item.Level > 0)
+                                                        {
+                                                            <span class="text-muted me-1">-&gt;</span>
+                                                        }
+                                                        @item.Name
+                                                    </div>
+                                                </td>
+                                                <td>@(item.ParentOrgUnitName ?? "-")</td>
+                                                <td>@item.ChildCount</td>
+                                                <td>@item.EmployeeCount</td>
+                                                <td class="text-end">
+                                                    <div class="d-flex justify-content-end gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                disabled="@(!item.CanDelete)"
+                                                                title="@GetDeleteTitle(item)"
+                                                                @onclick="() => DeleteAsync(item.OrgUnitId)">
+                                                            Rimuovi
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private OrgUnitAdminDto? _data;
+    private OrgUnitFormModel _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminOrgUnitAppService.GetAsync();
+
+            if (!_form.OrgUnitId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminOrgUnitAppService.SaveAsync(_form.OrgUnitId, new SaveOrgUnitInput
+            {
+                Name = _form.Name ?? string.Empty,
+                ParentOrgUnitId = ParseGuidOrNull(_form.ParentOrgUnitId)
+            });
+
+            _successMessage = _form.OrgUnitId.HasValue
+                ? "OrgUnit aggiornata correttamente."
+                : "OrgUnit creata correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid orgUnitId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminOrgUnitAppService.DeleteAsync(orgUnitId);
+            _successMessage = "OrgUnit rimossa correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Edit(OrgUnitAdminListItemDto item)
+    {
+        _form = new OrgUnitFormModel
+        {
+            OrgUnitId = item.OrgUnitId,
+            Name = item.Name,
+            ParentOrgUnitId = item.ParentOrgUnitId?.ToString()
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new OrgUnitFormModel();
+    }
+
+    private List<OrgUnitAdminListItemDto> GetParentCandidates()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        return _data.OrgUnits
+            .Where(x => !_form.OrgUnitId.HasValue || x.OrgUnitId != _form.OrgUnitId.Value)
+            .Where(x => !_form.OrgUnitId.HasValue || !IsDescendantOf(x.OrgUnitId, _form.OrgUnitId.Value))
+            .ToList();
+    }
+
+    private bool IsDescendantOf(Guid candidateId, Guid parentId)
+    {
+        if (_data is null)
+        {
+            return false;
+        }
+
+        var orgUnitById = _data.OrgUnits.ToDictionary(x => x.OrgUnitId, x => x);
+        var visited = new HashSet<Guid>();
+        var currentId = candidateId;
+
+        while (visited.Add(currentId) && orgUnitById.TryGetValue(currentId, out var current))
+        {
+            if (!current.ParentOrgUnitId.HasValue)
+            {
+                return false;
+            }
+
+            if (current.ParentOrgUnitId.Value == parentId)
+            {
+                return true;
+            }
+
+            currentId = current.ParentOrgUnitId.Value;
+        }
+
+        return false;
+    }
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string FormatOrgUnitOption(OrgUnitAdminListItemDto item)
+        => $"{new string('-', item.Level * 2)} {item.Name}".TrimStart();
+
+    private static string GetDeleteTitle(OrgUnitAdminListItemDto item)
+        => item.CanDelete
+            ? "Rimuovi OrgUnit"
+            : "Non rimovibile: esistono employee o OrgUnit figlie collegate.";
+
+    private class OrgUnitFormModel
+    {
+        public Guid? OrgUnitId { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string? Name { get; set; }
+
+        public string? ParentOrgUnitId { get; set; }
+    }
+}
