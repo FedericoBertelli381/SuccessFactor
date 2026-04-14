@@ -92,7 +92,47 @@ M012;Mario Rossi;m.rossi@lesoluzioni.net;-;-;true
 - Provare `Link by email` su employee con email corrispondente a un utente.
 - Verificare che un utente non admin non possa accedere al linking.
 
-## 8. Controlli dati minimi
+## 8. Smoke test Admin Cycles e setup performance
+
+- Aprire `/admin/cycles?__tenant=...`.
+- Verificare lista cicli.
+- Creare o modificare un ciclo di test se necessario.
+- Aprire `/admin/cycle-participants?__tenant=...`.
+- Selezionare ciclo.
+- Aggiungere/modificare/rimuovere un participant di test.
+- Aprire `/admin/manager-relations?__tenant=...`.
+- Creare una relazione manager `Line` e `Primary`.
+- Verificare che la relazione appaia nel Team flow del manager.
+- Aprire `/admin/performance-import?__tenant=...`.
+- Importare CSV participants valido.
+- Importare CSV manager relations valido.
+- Importare CSV con almeno un errore e verificare che nessuna riga venga salvata.
+
+Formato CSV participants:
+
+```csv
+Cycle;EmployeeMatricola;PhaseCode;Status
+Performance 2026;M011;MGR_ASSESSMENT;Active
+Performance 2026;M012;-;Active
+```
+
+Formato CSV manager relations:
+
+```csv
+EmployeeMatricola;ManagerMatricola;RelationType;IsPrimary;StartDate;EndDate
+M011;M001;Line;true;2026-01-01;
+M012;M001;Line;true;2026-01-01;
+```
+
+## 9. Smoke test Production Readiness
+
+- Aprire `/admin/readiness?__tenant=...`.
+- Verificare che non ci siano status `Error`.
+- Valutare eventuali `Warning` prima del deploy rehearsal.
+- Verificare conteggi principali: employee, user link, cicli attivi, participants, manager relations, workflow policies.
+- Usare la pagina come controllo rapido prima e dopo deploy su staging/target.
+
+## 10. Controlli dati minimi
 
 - Ogni employee che deve usare `/my` ha `Employees.UserId` valorizzato.
 - Ogni manager ha almeno una relazione attiva in `EmployeeManagers`.
@@ -101,21 +141,22 @@ M012;Mario Rossi;m.rossi@lesoluzioni.net;-;-;true
 - Le policy workflow usano accessi come stringhe: `"Hidden"`, `"Read"`, `"Edit"`.
 - I tenant dei record creati da admin/import sono coerenti con il tenant corrente.
 
-## 9. Criteri minimi per deploy
+## 11. Criteri minimi per deploy
 
 - Build Visual Studio senza errori.
 - Smoke test Self completato.
 - Smoke test Team completato.
 - Smoke test HR completato.
 - Smoke test Admin completato.
+- Production Readiness senza `Error`.
 - Nessun errore tenant nelle navigazioni principali.
-- Nessuna dipendenza obbligatoria da script SQL per employee e user linking base.
+- Nessuna dipendenza obbligatoria da script SQL per employee, user linking, participants e manager relations base.
 - Backup database disponibile prima del deploy.
 - Connection string e tenant configurati per ambiente target.
 
-## 10. Rischi residui noti
+## 12. Rischi residui noti
 
-- La gestione completa di cycle participants e manager relations da UI e ancora da completare.
-- L'import CSV copre employee base, non ancora goal assignments o cycle participants.
+- La gestione completa OrgUnits e JobRoles e ancora da completare.
+- L'import CSV non copre ancora goal assignments, competency catalog/model e assessment setup.
 - L'area admin e funzionale ma ancora minimale.
 - La readiness finale richiede una prova deploy su ambiente target.

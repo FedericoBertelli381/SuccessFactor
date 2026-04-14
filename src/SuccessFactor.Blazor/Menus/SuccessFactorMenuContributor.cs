@@ -115,10 +115,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             8,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminWorkflow,
-                "Admin Workflow",
-                "/admin/workflow",
-                icon: "fas fa-sliders-h",
+                SuccessFactorMenus.AdminReadiness,
+                "Admin Readiness",
+                "/admin/readiness",
+                icon: "fas fa-clipboard-check",
                 order: 9
             )
         );
@@ -126,10 +126,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             9,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminEmployees,
-                "Admin Employees",
-                "/admin/employees",
-                icon: "fas fa-id-badge",
+                SuccessFactorMenus.AdminWorkflow,
+                "Admin Workflow",
+                "/admin/workflow",
+                icon: "fas fa-sliders-h",
                 order: 10
             )
         );
@@ -137,17 +137,28 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             10,
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminEmployees,
+                "Admin Employees",
+                "/admin/employees",
+                icon: "fas fa-id-badge",
+                order: 11
+            )
+        );
+
+        context.Menu.Items.Insert(
+            11,
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 11
+                order: 12
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 12;
+        administration.Order = 13;
     
         if (MultiTenancyConsts.IsEnabled)
         {

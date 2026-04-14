@@ -51,22 +51,9 @@ Include:
 - STEP 26 completato: cycle participant management base.
 - STEP 27 completato: manager relation admin base.
 - STEP 28 completato: import esteso setup performance.
+- STEP 29 completato: final hardening e deploy rehearsal base.
 
 ## Prossimo step consigliato
-
-### STEP 29 - Final hardening e deploy rehearsal
-
-Obiettivo:
-- validare build, run, configurazioni ambiente e smoke test finali.
-
-Include:
-- checklist produzione.
-- logging/error handling.
-- verifica ruoli/tenant.
-- backup/restore DB.
-- prova deploy su ambiente target.
-
-## Step successivi
 
 ### STEP 30 - OrgUnit admin management
 
@@ -80,6 +67,8 @@ Include:
 - parent OrgUnit.
 - validazione anti-loop sulla gerarchia.
 - disattivazione soft o blocco delete se referenziata.
+
+## Step successivi
 
 ### STEP 31 - JobRole admin management
 
