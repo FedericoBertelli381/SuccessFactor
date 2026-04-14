@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Competencies.Assessments;
 using SuccessFactor.Cycles;
+using SuccessFactor.Goals;
 using SuccessFactor.Process;
 using SuccessFactor.Workflow;
 using Volo.Abp;
@@ -20,6 +22,9 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
     private readonly ICurrentUser _currentUser;
     private readonly IAsyncQueryableExecuter _asyncExecuter;
     private readonly IRepository<Cycle, Guid> _cycleRepository;
+    private readonly IRepository<CycleParticipant, Guid> _participantRepository;
+    private readonly IRepository<GoalAssignment, Guid> _goalAssignmentRepository;
+    private readonly IRepository<CompetencyAssessment, Guid> _assessmentRepository;
     private readonly IRepository<ProcessTemplate, Guid> _templateRepository;
     private readonly IRepository<ProcessPhase, Guid> _phaseRepository;
 
@@ -27,12 +32,18 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
         ICurrentUser currentUser,
         IAsyncQueryableExecuter asyncExecuter,
         IRepository<Cycle, Guid> cycleRepository,
+        IRepository<CycleParticipant, Guid> participantRepository,
+        IRepository<GoalAssignment, Guid> goalAssignmentRepository,
+        IRepository<CompetencyAssessment, Guid> assessmentRepository,
         IRepository<ProcessTemplate, Guid> templateRepository,
         IRepository<ProcessPhase, Guid> phaseRepository)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
         _cycleRepository = cycleRepository;
+        _participantRepository = participantRepository;
+        _goalAssignmentRepository = goalAssignmentRepository;
+        _assessmentRepository = assessmentRepository;
         _templateRepository = templateRepository;
         _phaseRepository = phaseRepository;
     }
@@ -62,6 +73,7 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
 
         var templateById = templates.ToDictionary(x => x.Id, x => x);
         var phaseById = phases.ToDictionary(x => x.Id, x => x);
+        var statsByCycleId = await GetStatsByCycleIdAsync(cycles.Select(x => x.Id).ToList());
 
         return new CycleAdminDto
         {
@@ -81,7 +93,7 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
                 PhaseOrder = x.PhaseOrder,
                 IsTerminal = x.IsTerminal
             }).ToList(),
-            Cycles = cycles.Select(x => MapCycle(x, templateById, phaseById)).ToList()
+            Cycles = cycles.Select(x => MapCycle(x, templateById, phaseById, statsByCycleId)).ToList()
         };
     }
 
@@ -97,6 +109,7 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
         if (id.HasValue)
         {
             entity = await _cycleRepository.GetAsync(id.Value);
+            await ValidateCycleEditAsync(entity, input);
         }
         else
         {
@@ -134,8 +147,35 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
         var phaseById = phase is null
             ? new Dictionary<Guid, ProcessPhase>()
             : new Dictionary<Guid, ProcessPhase> { [phase.Id] = phase };
+        var statsByCycleId = await GetStatsByCycleIdAsync([entity.Id]);
 
-        return MapCycle(entity, new Dictionary<Guid, ProcessTemplate> { [template.Id] = template }, phaseById);
+        return MapCycle(entity, new Dictionary<Guid, ProcessTemplate> { [template.Id] = template }, phaseById, statsByCycleId);
+    }
+
+    public async Task ActivateAsync(Guid cycleId)
+    {
+        EnsureTenantAndAdmin();
+
+        var entity = await _cycleRepository.GetAsync(cycleId);
+        await ValidateActivationAsync(entity);
+
+        entity.Status = "Active";
+        entity.StartDate ??= DateOnly.FromDateTime(Clock.Now);
+
+        await _cycleRepository.UpdateAsync(entity, autoSave: true);
+    }
+
+    public async Task CloseAsync(Guid cycleId)
+    {
+        EnsureTenantAndAdmin();
+
+        var entity = await _cycleRepository.GetAsync(cycleId);
+        await ValidateClosureAsync(entity);
+
+        entity.Status = "Closed";
+        entity.EndDate ??= DateOnly.FromDateTime(Clock.Now);
+
+        await _cycleRepository.UpdateAsync(entity, autoSave: true);
     }
 
     private void EnsureTenantAndAdmin()
@@ -165,6 +205,78 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
         {
             throw new BusinessException("PhaseNotInTemplate");
         }
+    }
+
+    private async Task ValidateCycleEditAsync(Cycle entity, CreateUpdateCycleDto input)
+    {
+        var hasSetupData = await HasSetupDataAsync(entity.Id);
+
+        if (hasSetupData && entity.TemplateId != input.TemplateId)
+        {
+            throw new BusinessException("CycleTemplateLockedBySetupData");
+        }
+
+        if (string.Equals(entity.Status, "Closed", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(input.Status, "Closed", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("ClosedCycleCannotBeReopened");
+        }
+
+        if (string.Equals(entity.Status, "Active", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(input.Status, "Draft", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("ActiveCycleCannotReturnToDraft");
+        }
+
+        if (!string.Equals(entity.Status, "Active", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(input.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            await ValidateActivationAsync(entity, input.CurrentPhaseId);
+        }
+
+        if (!string.Equals(entity.Status, "Closed", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(input.Status, "Closed", StringComparison.OrdinalIgnoreCase))
+        {
+            await ValidateClosureAsync(entity);
+        }
+    }
+
+    private async Task ValidateActivationAsync(Cycle cycle, Guid? currentPhaseId = null)
+    {
+        if (string.Equals(cycle.Status, "Closed", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("ClosedCycleCannotBeActivated");
+        }
+
+        if (!(currentPhaseId ?? cycle.CurrentPhaseId).HasValue)
+        {
+            throw new BusinessException("CurrentPhaseRequiredForActivation");
+        }
+
+        if (!await _participantRepository.AnyAsync(x => x.CycleId == cycle.Id))
+        {
+            throw new BusinessException("CycleRequiresParticipantsForActivation");
+        }
+    }
+
+    private async Task ValidateClosureAsync(Cycle cycle)
+    {
+        if (!string.Equals(cycle.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("OnlyActiveCycleCanBeClosed");
+        }
+
+        if (await _assessmentRepository.AnyAsync(x => x.CycleId == cycle.Id && x.Status == "Draft"))
+        {
+            throw new BusinessException("CycleHasDraftAssessments");
+        }
+    }
+
+    private async Task<bool> HasSetupDataAsync(Guid cycleId)
+    {
+        return await _participantRepository.AnyAsync(x => x.CycleId == cycleId) ||
+               await _goalAssignmentRepository.AnyAsync(x => x.CycleId == cycleId) ||
+               await _assessmentRepository.AnyAsync(x => x.CycleId == cycleId);
     }
 
     private async Task EnsureNoDuplicateNameAsync(Guid? excludeId, string name, int cycleYear)
@@ -207,9 +319,12 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
     private static CycleAdminListItemDto MapCycle(
         Cycle cycle,
         Dictionary<Guid, ProcessTemplate> templateById,
-        Dictionary<Guid, ProcessPhase> phaseById)
+        Dictionary<Guid, ProcessPhase> phaseById,
+        Dictionary<Guid, CycleAdminStats> statsByCycleId)
     {
         templateById.TryGetValue(cycle.TemplateId, out var template);
+        statsByCycleId.TryGetValue(cycle.Id, out var stats);
+        stats ??= new CycleAdminStats();
 
         ProcessPhase? phase = null;
         if (cycle.CurrentPhaseId.HasValue)
@@ -229,8 +344,46 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
             CurrentPhaseName = phase?.Name,
             Status = cycle.Status,
             StartDate = cycle.StartDate,
-            EndDate = cycle.EndDate
+            EndDate = cycle.EndDate,
+            ParticipantCount = stats.ParticipantCount,
+            GoalAssignmentCount = stats.GoalAssignmentCount,
+            AssessmentCount = stats.AssessmentCount,
+            DraftAssessmentCount = stats.DraftAssessmentCount,
+            HasSetupData = stats.HasSetupData,
+            CanActivate = cycle.Status == "Draft" && cycle.CurrentPhaseId.HasValue && stats.ParticipantCount > 0,
+            CanClose = cycle.Status == "Active" && stats.DraftAssessmentCount == 0
         };
+    }
+
+    private async Task<Dictionary<Guid, CycleAdminStats>> GetStatsByCycleIdAsync(List<Guid> cycleIds)
+    {
+        var result = cycleIds.ToDictionary(x => x, _ => new CycleAdminStats());
+
+        if (cycleIds.Count == 0)
+        {
+            return result;
+        }
+
+        var participants = await _participantRepository.GetListAsync(x => cycleIds.Contains(x.CycleId));
+        foreach (var group in participants.GroupBy(x => x.CycleId))
+        {
+            result[group.Key].ParticipantCount = group.Count();
+        }
+
+        var goalAssignments = await _goalAssignmentRepository.GetListAsync(x => cycleIds.Contains(x.CycleId));
+        foreach (var group in goalAssignments.GroupBy(x => x.CycleId))
+        {
+            result[group.Key].GoalAssignmentCount = group.Count();
+        }
+
+        var assessments = await _assessmentRepository.GetListAsync(x => cycleIds.Contains(x.CycleId));
+        foreach (var group in assessments.GroupBy(x => x.CycleId))
+        {
+            result[group.Key].AssessmentCount = group.Count();
+            result[group.Key].DraftAssessmentCount = group.Count(x => x.Status == "Draft");
+        }
+
+        return result;
     }
 
     private static string NormalizeRequired(string? value, string fieldName)
@@ -241,5 +394,14 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
         }
 
         return value.Trim();
+    }
+
+    private class CycleAdminStats
+    {
+        public int ParticipantCount { get; set; }
+        public int GoalAssignmentCount { get; set; }
+        public int AssessmentCount { get; set; }
+        public int DraftAssessmentCount { get; set; }
+        public bool HasSetupData => ParticipantCount > 0 || GoalAssignmentCount > 0 || AssessmentCount > 0;
     }
 }

@@ -11,7 +11,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h2 class="mb-1">Cycles Admin</h2>
-            <div class="text-muted">Gestione base dei cicli performance del tenant.</div>
+            <div class="text-muted">Gestione dei cicli performance con protezioni su attivazione, chiusura e setup collegato.</div>
         </div>
 
         <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
@@ -145,6 +145,7 @@
                                             <th>Template</th>
                                             <th>Fase</th>
                                             <th>Status</th>
+                                            <th>Setup</th>
                                             <th>Date</th>
                                             <th></th>
                                         </tr>
@@ -161,13 +162,38 @@
                                                     <div class="small text-muted">@item.CurrentPhaseName</div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge text-bg-light">@item.Status</span>
+                                                    <span class="badge @GetCycleStatusBadgeClass(item.Status)">@item.Status</span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        <span class="badge text-bg-light">Participants @item.ParticipantCount</span>
+                                                        <span class="badge text-bg-light">Goals @item.GoalAssignmentCount</span>
+                                                        <span class="badge text-bg-light">Assessments @item.AssessmentCount</span>
+                                                        @if (item.DraftAssessmentCount > 0)
+                                                        {
+                                                            <span class="badge text-bg-warning">Draft assessments @item.DraftAssessmentCount</span>
+                                                        }
+                                                    </div>
                                                 </td>
                                                 <td>@FormatDateRange(item.StartDate, item.EndDate)</td>
                                                 <td class="text-end">
-                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">
-                                                        Modifica
-                                                    </button>
+                                                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">
+                                                            Modifica
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-success"
+                                                                disabled="@(!item.CanActivate)"
+                                                                title="@GetActivateTitle(item)"
+                                                                @onclick="() => ActivateAsync(item.CycleId)">
+                                                            Attiva
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-warning"
+                                                                disabled="@(!item.CanClose)"
+                                                                title="@GetCloseTitle(item)"
+                                                                @onclick="() => CloseAsync(item.CycleId)">
+                                                            Chiudi
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         }
@@ -216,7 +242,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = GetFriendlyErrorMessage(ex);
         }
         finally
         {
@@ -252,7 +278,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = GetFriendlyErrorMessage(ex);
         }
         finally
         {
@@ -268,6 +294,42 @@
         if (_data is not null)
         {
             _data = await AdminCycleAppService.GetAsync(ParseGuidOrNull(_form.TemplateId));
+        }
+    }
+
+    private async Task ActivateAsync(Guid cycleId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCycleAppService.ActivateAsync(cycleId);
+            _successMessage = "Ciclo attivato correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+    }
+
+    private async Task CloseAsync(Guid cycleId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCycleAppService.CloseAsync(cycleId);
+            _successMessage = "Ciclo chiuso correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
         }
     }
 
@@ -318,6 +380,111 @@
 
     private static string FormatDate(DateOnly? value)
         => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private static string GetCycleStatusBadgeClass(string status)
+        => status switch
+        {
+            "Active" => "text-bg-success",
+            "Closed" => "text-bg-secondary",
+            _ => "text-bg-light"
+        };
+
+    private static string GetActivateTitle(CycleAdminListItemDto item)
+    {
+        if (item.CanActivate)
+        {
+            return "Attiva ciclo";
+        }
+
+        if (item.Status != "Draft")
+        {
+            return "Solo i cicli Draft possono essere attivati.";
+        }
+
+        if (!item.CurrentPhaseId.HasValue)
+        {
+            return "Serve una current phase prima di attivare.";
+        }
+
+        if (item.ParticipantCount == 0)
+        {
+            return "Serve almeno un participant prima di attivare.";
+        }
+
+        return "Ciclo non attivabile.";
+    }
+
+    private static string GetCloseTitle(CycleAdminListItemDto item)
+    {
+        if (item.CanClose)
+        {
+            return "Chiudi ciclo";
+        }
+
+        if (item.Status != "Active")
+        {
+            return "Solo i cicli Active possono essere chiusi.";
+        }
+
+        if (item.DraftAssessmentCount > 0)
+        {
+            return "Non chiudibile: ci sono assessment ancora Draft.";
+        }
+
+        return "Ciclo non chiudibile.";
+    }
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("CycleRequiresParticipantsForActivation", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Serve almeno un participant prima di attivare il ciclo.";
+        }
+
+        if (message.Contains("CurrentPhaseRequiredForActivation", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Serve una current phase prima di attivare il ciclo.";
+        }
+
+        if (message.Contains("CycleHasDraftAssessments", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il ciclo non puo essere chiuso: ci sono assessment ancora Draft.";
+        }
+
+        if (message.Contains("CycleTemplateLockedBySetupData", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il template non puo essere cambiato: il ciclo ha gia participant, goal o assessment collegati.";
+        }
+
+        if (message.Contains("ClosedCycleCannotBeReopened", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Un ciclo chiuso non puo essere riaperto da questa pagina.";
+        }
+
+        if (message.Contains("ActiveCycleCannotReturnToDraft", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Un ciclo attivo non puo tornare in Draft.";
+        }
+
+        if (message.Contains("OnlyActiveCycleCanBeClosed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Solo un ciclo Active puo essere chiuso.";
+        }
+
+        if (message.Contains("ClosedCycleCannotBeActivated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Un ciclo chiuso non puo essere riattivato.";
+        }
+
+        if (message.Contains("CycleAlreadyExists", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Esiste gia un ciclo con lo stesso nome e anno.";
+        }
+
+        return message;
+    }
 
     private class CycleFormModel
     {

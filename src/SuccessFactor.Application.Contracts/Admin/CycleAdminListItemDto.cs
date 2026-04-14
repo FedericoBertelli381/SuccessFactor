@@ -15,4 +15,11 @@ public class CycleAdminListItemDto
     public string Status { get; set; } = string.Empty;
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
+    public int ParticipantCount { get; set; }
+    public int GoalAssignmentCount { get; set; }
+    public int AssessmentCount { get; set; }
+    public int DraftAssessmentCount { get; set; }
+    public bool HasSetupData { get; set; }
+    public bool CanActivate { get; set; }
+    public bool CanClose { get; set; }
 }

@@ -9,4 +9,6 @@ public interface IAdminCycleAppService : IApplicationService
 {
     Task<CycleAdminDto> GetAsync(Guid? templateId = null);
     Task<CycleAdminListItemDto> SaveAsync(Guid? id, CreateUpdateCycleDto input);
+    Task ActivateAsync(Guid cycleId);
+    Task CloseAsync(Guid cycleId);
 }

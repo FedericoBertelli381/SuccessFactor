@@ -55,20 +55,22 @@ Include:
 - STEP 30 completato: OrgUnit admin management base.
 - STEP 31 completato: JobRole admin management base.
 - STEP 32 completato: Org chart e struttura organizzativa read-only.
+- STEP 33 completato: Manager relations admin hardening.
+- STEP 34 completato: Cycle management hardening.
 
 ## Prossimo step consigliato
 
-### STEP 33 - Manager relations admin hardening
+### STEP 35 - Cycle participants admin hardening
 
 Obiettivo:
-- consolidare la gestione `EmployeeManagers` gia introdotta nello STEP 27.
-- migliorare usabilita e controlli della pagina manager relations.
+- completare la gestione partecipanti ciclo oltre la base gia presente.
 
 Include:
-- filtro/search su employee e manager.
-- evidenza relazioni attive/scadute/future.
-- revisione messaggi errore duplicati/date/self-manager.
-- verifica che lo scope manageriale resti basato su `EmployeeManagers`.
+- ricerca employee.
+- bulk add da employee attivi.
+- reset fase controllato.
+- filtri per ciclo/status/fase.
+- protezioni se il ciclo e chiuso o contiene setup non modificabile.
 
 ---
 
