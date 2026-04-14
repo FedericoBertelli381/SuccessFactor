@@ -54,19 +54,21 @@ Include:
 - STEP 29 completato: final hardening e deploy rehearsal base.
 - STEP 30 completato: OrgUnit admin management base.
 - STEP 31 completato: JobRole admin management base.
+- STEP 32 completato: Org chart e struttura organizzativa read-only.
 
 ## Prossimo step consigliato
 
-### STEP 32 - Org chart e struttura organizzativa
+### STEP 33 - Manager relations admin hardening
 
 Obiettivo:
-- visualizzare la struttura organizzativa e renderla utile anche per HR/admin.
+- consolidare la gestione `EmployeeManagers` gia introdotta nello STEP 27.
+- migliorare usabilita e controlli della pagina manager relations.
 
 Include:
-- vista ad albero OrgUnits.
-- employee per OrgUnit.
-- manager principali.
-- evidenza employee senza OrgUnit.
+- filtro/search su employee e manager.
+- evidenza relazioni attive/scadute/future.
+- revisione messaggi errore duplicati/date/self-manager.
+- verifica che lo scope manageriale resti basato su `EmployeeManagers`.
 
 ---
 

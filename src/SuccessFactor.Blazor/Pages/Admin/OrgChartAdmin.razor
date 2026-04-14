@@ -1,0 +1,243 @@
+@page "/admin/org-chart"
+@using SuccessFactor.Admin
+@inject IAdminOrgChartAppService AdminOrgChartAppService
+
+<PageTitle>Org Chart Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Org Chart Admin</h2>
+            <div class="text-muted">Vista read-only della struttura organizzativa, employee e manager principali.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento org chart...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">OrgUnits</div>
+                        <div class="display-6">@_data.TotalOrgUnits</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Employee</div>
+                        <div class="display-6">@_data.TotalEmployees</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Employee senza OrgUnit</div>
+                        <div class="display-6">@_data.EmployeesWithoutOrgUnitCount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Struttura organizzativa</strong>
+                <span class="badge text-bg-light">@_data.OrgUnits.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_data.OrgUnits.Count == 0)
+                {
+                    <div class="text-muted">Nessuna OrgUnit presente.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>OrgUnit</th>
+                                    <th>Parent</th>
+                                    <th>Child</th>
+                                    <th>Employee diretti</th>
+                                    <th>Employee</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var orgUnit in _data.OrgUnits)
+                                {
+                                    <tr>
+                                        <td style="min-width: 220px">
+                                            <div class="fw-semibold" style="padding-left: @(orgUnit.Level * 1.25)rem">
+                                                @if (orgUnit.Level > 0)
+                                                {
+                                                    <span class="text-muted me-1">-&gt;</span>
+                                                }
+                                                @orgUnit.Name
+                                            </div>
+                                            <div class="small text-muted">@orgUnit.Path</div>
+                                        </td>
+                                        <td>@(orgUnit.ParentOrgUnitName ?? "-")</td>
+                                        <td>@orgUnit.ChildOrgUnitCount</td>
+                                        <td>@orgUnit.DirectEmployeeCount</td>
+                                        <td>
+                                            @if (orgUnit.Employees.Count == 0)
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                            else
+                                            {
+                                                <div class="d-flex flex-column gap-2">
+                                                    @foreach (var employee in orgUnit.Employees)
+                                                    {
+                                                        <div class="border rounded p-2">
+                                                            <div class="d-flex flex-wrap justify-content-between gap-2">
+                                                                <div>
+                                                                    <div class="fw-semibold">@employee.FullName</div>
+                                                                    <div class="small text-muted">@employee.Matricola</div>
+                                                                </div>
+                                                                <div class="text-end">
+                                                                    <span class="badge text-bg-light">@FormatJobRole(employee)</span>
+                                                                    @if (!employee.IsActive)
+                                                                    {
+                                                                        <span class="badge text-bg-secondary ms-1">Inactive</span>
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                            <div class="small text-muted mt-1">
+                                                                Manager: @FormatManager(employee)
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Employee senza OrgUnit</strong>
+                <span class="badge text-bg-light">@_data.EmployeesWithoutOrgUnit.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_data.EmployeesWithoutOrgUnit.Count == 0)
+                {
+                    <div class="text-muted">Tutti gli employee hanno una OrgUnit assegnata.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Email</th>
+                                    <th>JobRole</th>
+                                    <th>Manager</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var employee in _data.EmployeesWithoutOrgUnit)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@employee.FullName</div>
+                                            <div class="small text-muted">@employee.Matricola</div>
+                                        </td>
+                                        <td>@(employee.Email ?? "-")</td>
+                                        <td>@FormatJobRole(employee)</td>
+                                        <td>@FormatManager(employee)</td>
+                                        <td>
+                                            <span class="badge @(employee.IsActive ? "text-bg-success" : "text-bg-secondary")">
+                                                @(employee.IsActive ? "Active" : "Inactive")
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private string? _error;
+    private OrgChartDto? _data;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminOrgChartAppService.GetAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatJobRole(OrgChartEmployeeDto employee)
+        => string.IsNullOrWhiteSpace(employee.JobRoleName) ? "-" : employee.JobRoleName;
+
+    private static string FormatManager(OrgChartEmployeeDto employee)
+    {
+        if (string.IsNullOrWhiteSpace(employee.PrimaryManagerName))
+        {
+            return "-";
+        }
+
+        return string.IsNullOrWhiteSpace(employee.PrimaryManagerMatricola)
+            ? employee.PrimaryManagerName
+            : $"{employee.PrimaryManagerName} ({employee.PrimaryManagerMatricola})";
+    }
+}
