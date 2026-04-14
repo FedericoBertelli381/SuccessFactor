@@ -53,19 +53,20 @@ Include:
 - STEP 28 completato: import esteso setup performance.
 - STEP 29 completato: final hardening e deploy rehearsal base.
 - STEP 30 completato: OrgUnit admin management base.
+- STEP 31 completato: JobRole admin management base.
 
 ## Prossimo step consigliato
 
-### STEP 31 - JobRole admin management
+### STEP 32 - Org chart e struttura organizzativa
 
 Obiettivo:
-- gestire da UI i ruoli/mansioni aziendali.
+- visualizzare la struttura organizzativa e renderla utile anche per HR/admin.
 
 Include:
-- lista JobRoles.
-- create/edit JobRole.
-- collegamento con employee.
-- blocco delete se referenziato.
+- vista ad albero OrgUnits.
+- employee per OrgUnit.
+- manager principali.
+- evidenza employee senza OrgUnit.
 
 ---
 

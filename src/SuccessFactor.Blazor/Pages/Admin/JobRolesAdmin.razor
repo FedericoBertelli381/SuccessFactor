@@ -1,0 +1,249 @@
+@page "/admin/job-roles"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using SuccessFactor.Admin
+@inject IAdminJobRoleAppService AdminJobRoleAppService
+
+<PageTitle>JobRoles Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">JobRoles Admin</h2>
+            <div class="text-muted">Gestione base dei ruoli/mansioni aziendali del tenant.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento JobRoles...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.JobRoleId.HasValue ? "Modifica JobRole" : "Nuovo JobRole")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Nome</label>
+                                    <InputText class="form-control" @bind-Value="_form.Name" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva JobRole
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>JobRoles</strong>
+                        <span class="badge text-bg-light">@_data.JobRoles.Count</span>
+                    </div>
+                    <div class="card-body">
+                        @if (_data.JobRoles.Count == 0)
+                        {
+                            <div class="text-muted">Nessun JobRole presente.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Employee</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _data.JobRoles)
+                                        {
+                                            <tr class="@(_form.JobRoleId == item.JobRoleId ? "table-primary" : null)">
+                                                <td class="fw-semibold">@item.Name</td>
+                                                <td>@item.EmployeeCount</td>
+                                                <td class="text-end">
+                                                    <div class="d-flex justify-content-end gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                disabled="@(!item.CanDelete)"
+                                                                title="@GetDeleteTitle(item)"
+                                                                @onclick="() => DeleteAsync(item.JobRoleId)">
+                                                            Rimuovi
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private JobRoleAdminDto? _data;
+    private JobRoleFormModel _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminJobRoleAppService.GetAsync();
+
+            if (!_form.JobRoleId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminJobRoleAppService.SaveAsync(_form.JobRoleId, new SaveJobRoleInput
+            {
+                Name = _form.Name ?? string.Empty
+            });
+
+            _successMessage = _form.JobRoleId.HasValue
+                ? "JobRole aggiornato correttamente."
+                : "JobRole creato correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid jobRoleId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminJobRoleAppService.DeleteAsync(jobRoleId);
+            _successMessage = "JobRole rimosso correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Edit(JobRoleAdminListItemDto item)
+    {
+        _form = new JobRoleFormModel
+        {
+            JobRoleId = item.JobRoleId,
+            Name = item.Name
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new JobRoleFormModel();
+    }
+
+    private static string GetDeleteTitle(JobRoleAdminListItemDto item)
+        => item.CanDelete
+            ? "Rimuovi JobRole"
+            : "Non rimovibile: esistono employee collegati.";
+
+    private class JobRoleFormModel
+    {
+        public Guid? JobRoleId { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string? Name { get; set; }
+    }
+}
