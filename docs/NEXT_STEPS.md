@@ -48,45 +48,11 @@ Include:
 - STEP 23 completato: hardening admin tenant e ruolo.
 - STEP 24 completato: production readiness checklist e smoke test runbook.
 - STEP 25 completato: admin cycle management base.
+- STEP 26 completato: cycle participant management base.
+- STEP 27 completato: manager relation admin base.
+- STEP 28 completato: import esteso setup performance.
 
 ## Prossimo step consigliato
-
-### STEP 26 - Cycle participant management base
-
-Obiettivo:
-- aggiungere/rimuovere partecipanti dal ciclo da interfaccia admin.
-- preparare meglio gli scenari HR e manageriali senza script manuali.
-
-Include:
-- lista partecipanti per ciclo.
-- add participant.
-- current phase iniziale.
-- status partecipazione.
-
-## Step successivi
-
-### STEP 27 - Manager relation admin base
-
-Obiettivo:
-- gestire `EmployeeManagers` da UI.
-- eliminare script manuali per creare subordinati sotto un manager.
-
-Include:
-- selezione employee.
-- selezione manager.
-- start/end date.
-- primary/relationship type.
-
-### STEP 28 - Import esteso dati performance
-
-Obiettivo:
-- importare dati performance oltre agli employee.
-
-Include:
-- goal assignments.
-- cycle participants.
-- manager relations.
-- validazioni e report errori no-partial-save.
 
 ### STEP 29 - Final hardening e deploy rehearsal
 
@@ -100,6 +66,8 @@ Include:
 - backup/restore DB.
 - prova deploy su ambiente target.
 
+## Step successivi
+
 ### STEP 30 - OrgUnit admin management
 
 Obiettivo:
@@ -112,6 +80,17 @@ Include:
 - parent OrgUnit.
 - validazione anti-loop sulla gerarchia.
 - disattivazione soft o blocco delete se referenziata.
+
+### STEP 31 - JobRole admin management
+
+Obiettivo:
+- gestire da UI i ruoli/mansioni aziendali.
+
+Include:
+- lista JobRoles.
+- create/edit JobRole.
+- collegamento con employee.
+- blocco delete se referenziato.
 
 ---
 

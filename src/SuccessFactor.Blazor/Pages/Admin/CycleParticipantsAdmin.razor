@@ -1,0 +1,391 @@
+@page "/admin/cycle-participants"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Admin
+@inject IAdminCycleParticipantAppService AdminCycleParticipantAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Cycle Participants Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Cycle Participants Admin</h2>
+            <div class="text-muted">Gestione base dei partecipanti ciclo.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento cycle participants...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Selezione ciclo</strong>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">Ciclo</label>
+                        <select class="form-select"
+                                value="@(_selectedCycleId?.ToString() ?? string.Empty)"
+                                @onchange="OnCycleChangedAsync">
+                            @if (_data.Cycles.Count == 0)
+                            {
+                                <option value="">Nessun ciclo disponibile</option>
+                            }
+                            else
+                            {
+                                @foreach (var cycle in _data.Cycles)
+                                {
+                                    <option value="@cycle.CycleId">@cycle.Name (@cycle.CycleYear - @cycle.Status)</option>
+                                }
+                            }
+                        </select>
+
+                        @if (_data.SelectedCycleId.HasValue)
+                        {
+                            <div class="small text-muted mt-3">
+                                ciclo selezionato: @_data.SelectedCycleName
+                                <br />
+                                partecipanti: @_data.Participants.Count
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.ParticipantId.HasValue ? "Modifica participant" : "Nuovo participant")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-5">
+                                    <label class="form-label">Employee</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.EmployeeId" disabled="@_form.ParticipantId.HasValue">
+                                        <option value="">Seleziona employee</option>
+                                        @foreach (var employee in GetAvailableEmployees())
+                                        {
+                                            <option value="@employee.EmployeeId.ToString()">@employee.Matricola - @employee.FullName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Current phase</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.CurrentPhaseId">
+                                        <option value="">-</option>
+                                        @foreach (var phase in _data.Phases)
+                                        {
+                                            <option value="@phase.PhaseId.ToString()">@phase.PhaseOrder - @phase.PhaseCode</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label">Status</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.Status">
+                                        <option value="Active">Active</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Excluded">Excluded</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@(_saving || !_data.SelectedCycleId.HasValue)">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva participant
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Partecipanti ciclo</strong>
+                <span class="badge text-bg-light">@_data.Participants.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_data.Participants.Count == 0)
+                {
+                    <div class="text-muted">Nessun partecipante nel ciclo selezionato.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Matricola</th>
+                                    <th>Employee</th>
+                                    <th>Email</th>
+                                    <th>Fase</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _data.Participants)
+                                {
+                                    <tr class="@(_form.ParticipantId == item.ParticipantId ? "table-primary" : null)">
+                                        <td>@item.Matricola</td>
+                                        <td class="fw-semibold">@item.EmployeeName</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.EmployeeEmail) ? "-" : item.EmployeeEmail)</td>
+                                        <td>
+                                            <div>@(item.CurrentPhaseCode ?? "-")</div>
+                                            <div class="small text-muted">@item.CurrentPhaseName</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge text-bg-light">@item.Status</span>
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(item.ParticipantId)">Rimuovi</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private Guid? _selectedCycleId;
+    private CycleParticipantAdminDto? _data;
+    private ParticipantFormModel _form = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedCycleId = CycleId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminCycleParticipantAppService.GetAsync(_selectedCycleId);
+            _selectedCycleId = _data.SelectedCycleId;
+
+            if (!_form.ParticipantId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnCycleChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var cycleId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedCycleId = cycleId;
+        ResetForm();
+
+        NavigationManager.NavigateTo(BuildUrl(cycleId));
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_data is null || !_data.SelectedCycleId.HasValue)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCycleParticipantAppService.SaveAsync(_form.ParticipantId, new SaveCycleParticipantInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                EmployeeId = ParseGuidOrNull(_form.EmployeeId) ?? Guid.Empty,
+                CurrentPhaseId = ParseGuidOrNull(_form.CurrentPhaseId),
+                Status = _form.Status ?? "Active"
+            });
+
+            _successMessage = _form.ParticipantId.HasValue
+                ? "Participant aggiornato correttamente."
+                : "Participant aggiunto correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid participantId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCycleParticipantAppService.DeleteAsync(participantId);
+            _successMessage = "Participant rimosso correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Edit(CycleParticipantAdminListItemDto item)
+    {
+        _form = new ParticipantFormModel
+        {
+            ParticipantId = item.ParticipantId,
+            EmployeeId = item.EmployeeId.ToString(),
+            CurrentPhaseId = item.CurrentPhaseId?.ToString(),
+            Status = item.Status
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new ParticipantFormModel
+        {
+            Status = "Active",
+            CurrentPhaseId = _data?.Phases.OrderBy(x => x.PhaseOrder).FirstOrDefault()?.PhaseId.ToString()
+        };
+    }
+
+    private List<EmployeeAdminListItemDto> GetAvailableEmployees()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var participantEmployeeIds = _data.Participants
+            .Where(x => !_form.ParticipantId.HasValue || x.EmployeeId != ParseGuidOrNull(_form.EmployeeId))
+            .Select(x => x.EmployeeId)
+            .ToHashSet();
+
+        return _data.Employees
+            .Where(x => !participantEmployeeIds.Contains(x.EmployeeId))
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.FullName)
+            .ToList();
+    }
+
+    private string BuildUrl(Guid cycleId)
+    {
+        var url = QueryHelpers.AddQueryString("/admin/cycle-participants", "cycleId", cycleId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        return url;
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private class ParticipantFormModel
+    {
+        public Guid? ParticipantId { get; set; }
+        public string? EmployeeId { get; set; }
+        public string? CurrentPhaseId { get; set; }
+        public string? Status { get; set; } = "Active";
+    }
+}

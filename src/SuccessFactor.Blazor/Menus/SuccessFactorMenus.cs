@@ -11,6 +11,9 @@ public class SuccessFactorMenus
     public const string AdminIdentityLink = Prefix + ".AdminIdentityLink";
     public const string AdminEmployees = Prefix + ".AdminEmployees";
     public const string AdminCycles = Prefix + ".AdminCycles";
+    public const string AdminCycleParticipants = Prefix + ".AdminCycleParticipants";
+    public const string AdminManagerRelations = Prefix + ".AdminManagerRelations";
+    public const string AdminPerformanceImport = Prefix + ".AdminPerformanceImport";
 
     //Add your menu items here...
 

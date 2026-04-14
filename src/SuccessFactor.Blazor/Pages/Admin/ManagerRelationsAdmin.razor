@@ -1,0 +1,417 @@
+@page "/admin/manager-relations"
+@using Microsoft.AspNetCore.Components.Forms
+@using SuccessFactor.Admin
+@inject IAdminManagerRelationAppService AdminManagerRelationAppService
+
+<PageTitle>Manager Relations Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Manager Relations Admin</h2>
+            <div class="text-muted">Gestione base delle relazioni EmployeeManagers.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento manager relations...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.RelationId.HasValue ? "Modifica relazione" : "Nuova relazione")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuova</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Employee</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.EmployeeId">
+                                        <option value="">Seleziona employee</option>
+                                        @foreach (var employee in _data.Employees)
+                                        {
+                                            <option value="@employee.EmployeeId.ToString()">@employee.Matricola - @employee.FullName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">Manager</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.ManagerEmployeeId">
+                                        <option value="">Seleziona manager</option>
+                                        @foreach (var employee in GetManagerCandidates())
+                                        {
+                                            <option value="@employee.EmployeeId.ToString()">@employee.Matricola - @employee.FullName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Relation type</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.RelationType">
+                                        <option value="Line">Line</option>
+                                        <option value="Functional">Functional</option>
+                                        <option value="Project">Project</option>
+                                        <option value="Hr">Hr</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-12 col-md-6 d-flex align-items-end">
+                                    <div class="form-check mb-2">
+                                        <InputCheckbox class="form-check-input" @bind-Value="_form.IsPrimary" disabled="@_form.EndDate.HasValue" />
+                                        <label class="form-check-label">Primary</label>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Start date</label>
+                                    <InputDate class="form-control" @bind-Value="_form.StartDate" />
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">End date</label>
+                                    <InputDate class="form-control" @bind-Value="_form.EndDate" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva relazione
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Relazioni attive</strong>
+                        <span class="badge text-bg-light">@GetActiveRelations().Count</span>
+                    </div>
+                    <div class="card-body">
+                        @if (GetActiveRelations().Count == 0)
+                        {
+                            <div class="text-muted">Nessuna relazione attiva.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Employee</th>
+                                            <th>Manager</th>
+                                            <th>Tipo</th>
+                                            <th>Date</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in GetActiveRelations())
+                                        {
+                                            <tr class="@(_form.RelationId == item.RelationId ? "table-primary" : null)">
+                                                <td>
+                                                    <div class="fw-semibold">@item.EmployeeName</div>
+                                                    <div class="small text-muted">@item.EmployeeMatricola</div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold">@item.ManagerName</div>
+                                                    <div class="small text-muted">@item.ManagerMatricola</div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge text-bg-light">@item.RelationType</span>
+                                                    @if (item.IsPrimary)
+                                                    {
+                                                        <span class="badge text-bg-primary ms-1">Primary</span>
+                                                    }
+                                                </td>
+                                                <td>@FormatDateRange(item.StartDate, item.EndDate)</td>
+                                                <td class="text-end">
+                                                    <div class="d-flex justify-content-end gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => EndAsync(item.RelationId)">Chiudi</button>
+                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(item.RelationId)">Rimuovi</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Storico relazioni chiuse</strong>
+                <span class="badge text-bg-light">@GetClosedRelations().Count</span>
+            </div>
+            <div class="card-body">
+                @if (GetClosedRelations().Count == 0)
+                {
+                    <div class="text-muted">Nessuna relazione chiusa.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Manager</th>
+                                    <th>Tipo</th>
+                                    <th>Date</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in GetClosedRelations())
+                                {
+                                    <tr class="@(_form.RelationId == item.RelationId ? "table-primary" : null)">
+                                        <td>
+                                            <div class="fw-semibold">@item.EmployeeName</div>
+                                            <div class="small text-muted">@item.EmployeeMatricola</div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold">@item.ManagerName</div>
+                                            <div class="small text-muted">@item.ManagerMatricola</div>
+                                        </td>
+                                        <td><span class="badge text-bg-light">@item.RelationType</span></td>
+                                        <td>@FormatDateRange(item.StartDate, item.EndDate)</td>
+                                        <td class="text-end">
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(item.RelationId)">Rimuovi</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private ManagerRelationAdminDto? _data;
+    private ManagerRelationFormModel _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminManagerRelationAppService.GetAsync();
+
+            if (!_form.RelationId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminManagerRelationAppService.SaveAsync(_form.RelationId, new SaveManagerRelationInput
+            {
+                EmployeeId = ParseGuidOrNull(_form.EmployeeId) ?? Guid.Empty,
+                ManagerEmployeeId = ParseGuidOrNull(_form.ManagerEmployeeId) ?? Guid.Empty,
+                RelationType = _form.RelationType ?? "Line",
+                IsPrimary = _form.IsPrimary,
+                StartDate = _form.StartDate,
+                EndDate = _form.EndDate
+            });
+
+            _successMessage = _form.RelationId.HasValue
+                ? "Relazione manager aggiornata correttamente."
+                : "Relazione manager creata correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task EndAsync(Guid relationId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminManagerRelationAppService.EndAsync(relationId);
+            _successMessage = "Relazione manager chiusa correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(Guid relationId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminManagerRelationAppService.DeleteAsync(relationId);
+            _successMessage = "Relazione manager rimossa correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Edit(ManagerRelationAdminListItemDto item)
+    {
+        _form = new ManagerRelationFormModel
+        {
+            RelationId = item.RelationId,
+            EmployeeId = item.EmployeeId.ToString(),
+            ManagerEmployeeId = item.ManagerEmployeeId.ToString(),
+            RelationType = item.RelationType,
+            IsPrimary = item.IsPrimary,
+            StartDate = item.StartDate,
+            EndDate = item.EndDate
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new ManagerRelationFormModel
+        {
+            RelationType = "Line",
+            IsPrimary = true,
+            StartDate = DateOnly.FromDateTime(DateTime.Today)
+        };
+    }
+
+    private List<EmployeeAdminListItemDto> GetManagerCandidates()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var selectedEmployeeId = ParseGuidOrNull(_form.EmployeeId);
+
+        return _data.Employees
+            .Where(x => !selectedEmployeeId.HasValue || x.EmployeeId != selectedEmployeeId.Value)
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.FullName)
+            .ToList();
+    }
+
+    private List<ManagerRelationAdminListItemDto> GetActiveRelations()
+        => _data?.Relations.Where(x => x.IsActive).ToList() ?? [];
+
+    private List<ManagerRelationAdminListItemDto> GetClosedRelations()
+        => _data?.Relations.Where(x => !x.IsActive).ToList() ?? [];
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string FormatDateRange(DateOnly? startDate, DateOnly? endDate)
+        => $"{FormatDate(startDate)} - {FormatDate(endDate)}";
+
+    private static string FormatDate(DateOnly? value)
+        => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private class ManagerRelationFormModel
+    {
+        public Guid? RelationId { get; set; }
+        public string? EmployeeId { get; set; }
+        public string? ManagerEmployeeId { get; set; }
+        public string? RelationType { get; set; } = "Line";
+        public bool IsPrimary { get; set; } = true;
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? EndDate { get; set; }
+    }
+}

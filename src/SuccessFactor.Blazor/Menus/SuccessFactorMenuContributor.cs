@@ -82,10 +82,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             5,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminWorkflow,
-                "Admin Workflow",
-                "/admin/workflow",
-                icon: "fas fa-sliders-h",
+                SuccessFactorMenus.AdminCycleParticipants,
+                "Admin Participants",
+                "/admin/cycle-participants",
+                icon: "fas fa-user-check",
                 order: 6
             )
         );
@@ -93,10 +93,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             6,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminEmployees,
-                "Admin Employees",
-                "/admin/employees",
-                icon: "fas fa-id-badge",
+                SuccessFactorMenus.AdminManagerRelations,
+                "Admin Managers",
+                "/admin/manager-relations",
+                icon: "fas fa-user-tie",
                 order: 7
             )
         );
@@ -104,17 +104,50 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             7,
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminPerformanceImport,
+                "Admin Import",
+                "/admin/performance-import",
+                icon: "fas fa-file-import",
+                order: 8
+            )
+        );
+
+        context.Menu.Items.Insert(
+            8,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.AdminWorkflow,
+                "Admin Workflow",
+                "/admin/workflow",
+                icon: "fas fa-sliders-h",
+                order: 9
+            )
+        );
+
+        context.Menu.Items.Insert(
+            9,
+            new ApplicationMenuItem(
+                SuccessFactorMenus.AdminEmployees,
+                "Admin Employees",
+                "/admin/employees",
+                icon: "fas fa-id-badge",
+                order: 10
+            )
+        );
+
+        context.Menu.Items.Insert(
+            10,
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 8
+                order: 11
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 9;
+        administration.Order = 12;
     
         if (MultiTenancyConsts.IsEnabled)
         {

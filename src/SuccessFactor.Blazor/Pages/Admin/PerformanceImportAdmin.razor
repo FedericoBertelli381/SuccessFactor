@@ -1,0 +1,180 @@
+@page "/admin/performance-import"
+@using SuccessFactor.Admin
+@inject IPerformanceSetupImportAppService PerformanceSetupImportAppService
+
+<PageTitle>Performance Import Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Performance Import Admin</h2>
+            <div class="text-muted">Import setup ciclo con validazione completa e no partial save.</div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    <div class="row g-3">
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import participants</strong>
+                    <span class="badge text-bg-light">CycleParticipants</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Cycle;EmployeeMatricola;PhaseCode;Status</code>.
+                        <br />
+                        <span>Cycle puo essere nome ciclo o Guid. PhaseCode puo essere vuoto o <code>-</code>. Status: Active, Completed, Excluded.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="10"
+                              @bind="_participantsContent"
+                              placeholder="Cycle;EmployeeMatricola;PhaseCode;Status"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import manager relations</strong>
+                    <span class="badge text-bg-light">EmployeeManagers</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>EmployeeMatricola;ManagerMatricola;RelationType;IsPrimary;StartDate;EndDate</code>.
+                        <br />
+                        <span>RelationType: Line, Functional, Project, Hr. Date: yyyy-MM-dd oppure dd/MM/yyyy.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="10"
+                              @bind="_managerRelationsContent"
+                              placeholder="EmployeeMatricola;ManagerMatricola;RelationType;IsPrimary;StartDate;EndDate"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <strong>Commit import</strong>
+            <span class="badge text-bg-light">no partial save</span>
+        </div>
+        <div class="card-body">
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" @bind="_updateExisting" />
+                <label class="form-check-label">Aggiorna righe esistenti se trovate</label>
+            </div>
+
+            <button class="btn btn-primary"
+                    @onclick="ImportAsync"
+                    disabled="@(_importing || BothContentsAreEmpty())">
+                @if (_importing)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Importa setup performance
+            </button>
+
+            @if (_result is not null)
+            {
+                <div class="mt-4">
+                    <div class="@(_result.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                        @if (_result.HasErrors)
+                        {
+                            <span>Import bloccato: correggi gli errori e riprova. Nessuna riga e stata salvata.</span>
+                        }
+                        else
+                        {
+                            <span>
+                                Import completato. Participants creati: @_result.CreatedParticipants, aggiornati: @_result.UpdatedParticipants.
+                                Manager relations create: @_result.CreatedManagerRelations, aggiornate: @_result.UpdatedManagerRelations.
+                            </span>
+                        }
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Sezione</th>
+                                    <th>Riga</th>
+                                    <th>Chiave</th>
+                                    <th>Status</th>
+                                    <th>Messaggio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _result.Rows)
+                                {
+                                    <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                        <td>@row.Section</td>
+                                        <td>@row.RowNumber</td>
+                                        <td>@row.Key</td>
+                                        <td>@row.Status</td>
+                                        <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _importing;
+    private bool _updateExisting = true;
+    private string? _participantsContent;
+    private string? _managerRelationsContent;
+    private string? _error;
+    private string? _successMessage;
+    private PerformanceSetupImportResultDto? _result;
+
+    private async Task ImportAsync()
+    {
+        _importing = true;
+        _error = null;
+        _successMessage = null;
+        _result = null;
+
+        try
+        {
+            _result = await PerformanceSetupImportAppService.ImportAsync(new ImportPerformanceSetupInput
+            {
+                ParticipantsContent = _participantsContent,
+                ManagerRelationsContent = _managerRelationsContent,
+                UpdateExisting = _updateExisting
+            });
+
+            if (!_result.HasErrors)
+            {
+                _successMessage = "Import setup performance completato correttamente.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private bool BothContentsAreEmpty()
+        => string.IsNullOrWhiteSpace(_participantsContent) && string.IsNullOrWhiteSpace(_managerRelationsContent);
+}
