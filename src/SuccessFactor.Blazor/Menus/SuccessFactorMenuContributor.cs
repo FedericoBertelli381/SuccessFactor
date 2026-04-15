@@ -214,17 +214,28 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             17,
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminCompetencyModels,
+                "Admin Competency Models",
+                "/admin/competency-models",
+                icon: "fas fa-layer-group",
+                order: 18
+            )
+        );
+
+        context.Menu.Items.Insert(
+            18,
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 18
+                order: 19
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 19;
+        administration.Order = 20;
     
         if (MultiTenancyConsts.IsEnabled)
         {

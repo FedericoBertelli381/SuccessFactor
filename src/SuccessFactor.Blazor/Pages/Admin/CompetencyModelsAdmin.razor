@@ -1,0 +1,685 @@
+@page "/admin/competency-models"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Admin
+@inject IAdminCompetencyModelAppService AdminCompetencyModelAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Competency Models Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Competency Models Admin</h2>
+            <div class="text-muted">Gestione modelli competenze con scale, required item e weight.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento competency models...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Selezione modello</strong>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">Model</label>
+                        <select class="form-select"
+                                value="@(_selectedModelId?.ToString() ?? string.Empty)"
+                                @onchange="OnModelChangedAsync">
+                            @if (_data.Models.Count == 0)
+                            {
+                                <option value="">Nessun modello disponibile</option>
+                            }
+                            else
+                            {
+                                @foreach (var model in _data.Models)
+                                {
+                                    <option value="@model.ModelId">@model.Name (@model.ItemCount item, @model.AssessmentCount assessment)</option>
+                                }
+                            }
+                        </select>
+
+                        @if (_data.SelectedModelId.HasValue)
+                        {
+                            <div class="small text-muted mt-3">
+                                modello selezionato: @_data.SelectedModelName
+                                <br />
+                                item: @_data.Items.Count
+                                <br />
+                                assessment collegati: @_data.SelectedModelAssessmentCount
+                            </div>
+
+                            @if (!_data.CanEditSelectedModel)
+                            {
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    Il modello e gia usato da assessment: la struttura non e modificabile.
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_modelForm.ModelId.HasValue ? "Modifica model" : "Nuovo model")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="NewModelForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_modelForm" OnValidSubmit="SaveModelAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-5">
+                                    <label class="form-label">Name</label>
+                                    <InputText class="form-control" @bind-Value="_modelForm.Name" disabled="@(!CanEditModelForm())" />
+                                </div>
+                                <div class="col-12 col-md-4 col-lg-3">
+                                    <label class="form-label">Scale type</label>
+                                    <InputText class="form-control" @bind-Value="_modelForm.ScaleType" disabled="@(!CanEditModelForm())" />
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label class="form-label">Min</label>
+                                    <InputNumber class="form-control" @bind-Value="_modelForm.MinScore" disabled="@(!CanEditModelForm())" />
+                                </div>
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <label class="form-label">Max</label>
+                                    <InputNumber class="form-control" @bind-Value="_modelForm.MaxScore" disabled="@(!CanEditModelForm())" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@(_saving || !CanEditModelForm())">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva model
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetModelForm">
+                                    Annulla
+                                </button>
+                                @if (_modelForm.ModelId.HasValue)
+                                {
+                                    var selected = _data.Models.FirstOrDefault(x => x.ModelId == _modelForm.ModelId.Value);
+                                    <button class="btn btn-outline-danger"
+                                            type="button"
+                                            disabled="@_saving || selected is null || !selected.CanDelete"
+                                            title="@GetDeleteModelTitle(selected)"
+                                            @onclick="() => DeleteModelAsync(_modelForm.ModelId.Value)">
+                                        Rimuovi model
+                                    </button>
+                                }
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (_data.SelectedModelId.HasValue)
+        {
+            <div class="row g-3">
+                <div class="col-12 col-xxl-5">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <strong>@(_itemForm.ModelItemId.HasValue ? "Modifica model item" : "Nuovo model item")</strong>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="ResetItemForm">Nuovo</button>
+                        </div>
+                        <div class="card-body">
+                            <EditForm Model="_itemForm" OnValidSubmit="SaveItemAsync">
+                                <DataAnnotationsValidator />
+                                <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label">Competency</label>
+                                        <InputSelect class="form-select" @bind-Value="_itemForm.CompetencyId" disabled="@(!CanEditSelectedModel())">
+                                            <option value="">Seleziona competency</option>
+                                            @foreach (var competency in GetAvailableCompetenciesForForm())
+                                            {
+                                                <option value="@competency.CompetencyId.ToString()">@competency.Code - @competency.Name</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Weight</label>
+                                        <InputNumber class="form-control" @bind-Value="_itemForm.Weight" disabled="@(!CanEditSelectedModel())" />
+                                    </div>
+                                    <div class="col-12 col-md-6 d-flex align-items-end">
+                                        <div class="form-check mb-2">
+                                            <InputCheckbox class="form-check-input" @bind-Value="_itemForm.IsRequired" disabled="@(!CanEditSelectedModel())" />
+                                            <label class="form-check-label">Required</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mt-4">
+                                    <button class="btn btn-primary" type="submit" disabled="@(_saving || !CanEditSelectedModel())">
+                                        Salva item
+                                    </button>
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ResetItemForm">
+                                        Annulla
+                                    </button>
+                                </div>
+                            </EditForm>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xxl-7">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                <strong>Model items</strong>
+                                <span class="badge text-bg-light">@GetFilteredItems().Count / @_data.Items.Count</span>
+                            </div>
+                            <div class="row g-2 mt-2">
+                                <div class="col-12 col-lg-7">
+                                    <input class="form-control"
+                                           placeholder="Cerca code o name..."
+                                           @bind="_itemSearch"
+                                           @bind:event="oninput" />
+                                </div>
+                                <div class="col-12 col-lg-5">
+                                    <select class="form-select" @bind="_requiredFilter">
+                                        <option value="">Tutti</option>
+                                        <option value="required">Required</option>
+                                        <option value="optional">Optional</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            @if (GetFilteredItems().Count == 0)
+                            {
+                                <div class="text-muted">Nessun item trovato.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Competency</th>
+                                                <th>Status</th>
+                                                <th>Weight</th>
+                                                <th>Required</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in GetFilteredItems())
+                                            {
+                                                <tr class="@(_itemForm.ModelItemId == item.ModelItemId ? "table-primary" : null)">
+                                                    <td>
+                                                        <div class="fw-semibold">@item.CompetencyCode</div>
+                                                        <div class="small text-muted">@item.CompetencyName</div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge @(item.CompetencyIsActive ? "text-bg-success" : "text-bg-secondary")">
+                                                            @(item.CompetencyIsActive ? "Active" : "Inactive")
+                                                        </span>
+                                                    </td>
+                                                    <td>@FormatWeight(item.Weight)</td>
+                                                    <td>@(item.IsRequired ? "Yes" : "No")</td>
+                                                    <td class="text-end">
+                                                        <div class="d-flex justify-content-end gap-2">
+                                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditItem(item)">Modifica</button>
+                                                            <button class="btn btn-sm btn-outline-danger"
+                                                                    disabled="@(!CanEditSelectedModel())"
+                                                                    @onclick="() => DeleteItemAsync(item.ModelItemId)">
+                                                                Rimuovi
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "modelId")]
+    public Guid? ModelId { get; set; }
+
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private Guid? _selectedModelId;
+    private CompetencyModelAdminDto? _data;
+    private CompetencyModelFormModel _modelForm = new();
+    private CompetencyModelItemFormModel _itemForm = new();
+    private string? _itemSearch;
+    private string? _requiredFilter;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedModelId = ModelId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminCompetencyModelAppService.GetAsync(_selectedModelId);
+            _selectedModelId = _data.SelectedModelId;
+
+            if (!_modelForm.ModelId.HasValue)
+            {
+                ResetModelForm();
+            }
+
+            if (!_itemForm.ModelItemId.HasValue)
+            {
+                ResetItemForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnModelChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var modelId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedModelId = modelId;
+        ResetModelForm();
+        ResetItemForm();
+
+        NavigationManager.NavigateTo(BuildUrl(modelId));
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveModelAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var saved = await AdminCompetencyModelAppService.SaveModelAsync(_modelForm.ModelId, new SaveCompetencyModelInput
+            {
+                Name = _modelForm.Name ?? string.Empty,
+                ScaleType = _modelForm.ScaleType ?? "Numeric",
+                MinScore = _modelForm.MinScore,
+                MaxScore = _modelForm.MaxScore
+            });
+
+            _successMessage = _modelForm.ModelId.HasValue
+                ? "Competency model aggiornato correttamente."
+                : "Competency model creato correttamente.";
+
+            _selectedModelId = saved.ModelId;
+            ResetModelForm();
+            ResetItemForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteModelAsync(Guid modelId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCompetencyModelAppService.DeleteModelAsync(modelId);
+            _successMessage = "Competency model rimosso correttamente.";
+            _selectedModelId = null;
+            ResetModelForm();
+            ResetItemForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+    }
+
+    private async Task SaveItemAsync()
+    {
+        if (_data is null || !_data.SelectedModelId.HasValue)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCompetencyModelAppService.SaveItemAsync(_itemForm.ModelItemId, new SaveCompetencyModelItemInput
+            {
+                ModelId = _data.SelectedModelId.Value,
+                CompetencyId = ParseGuidOrNull(_itemForm.CompetencyId) ?? Guid.Empty,
+                Weight = _itemForm.Weight,
+                IsRequired = _itemForm.IsRequired
+            });
+
+            _successMessage = _itemForm.ModelItemId.HasValue
+                ? "Competency model item aggiornato correttamente."
+                : "Competency model item aggiunto correttamente.";
+
+            ResetItemForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteItemAsync(Guid modelItemId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminCompetencyModelAppService.DeleteItemAsync(modelItemId);
+            _successMessage = "Competency model item rimosso correttamente.";
+            ResetItemForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+    }
+
+    private void ResetModelForm()
+    {
+        var selected = _data?.Models.FirstOrDefault(x => x.ModelId == _selectedModelId);
+
+        _modelForm = selected is null
+            ? new CompetencyModelFormModel()
+            : new CompetencyModelFormModel
+            {
+                ModelId = selected.ModelId,
+                Name = selected.Name,
+                ScaleType = selected.ScaleType,
+                MinScore = selected.MinScore,
+                MaxScore = selected.MaxScore
+            };
+    }
+
+    private void NewModelForm()
+    {
+        _modelForm = new CompetencyModelFormModel();
+    }
+
+    private void ResetItemForm()
+    {
+        _itemForm = new CompetencyModelItemFormModel();
+    }
+
+    private void EditItem(CompetencyModelItemAdminListItemDto item)
+    {
+        _itemForm = new CompetencyModelItemFormModel
+        {
+            ModelItemId = item.ModelItemId,
+            CompetencyId = item.CompetencyId.ToString(),
+            Weight = item.Weight,
+            IsRequired = item.IsRequired
+        };
+    }
+
+    private bool CanEditSelectedModel()
+        => _data?.CanEditSelectedModel == true;
+
+    private bool CanEditModelForm()
+        => !_modelForm.ModelId.HasValue || CanEditSelectedModel();
+
+    private List<CompetencyCatalogAdminListItemDto> GetAvailableCompetenciesForForm()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var currentCompetencyId = ParseGuidOrNull(_itemForm.CompetencyId);
+
+        return _data.Competencies
+            .Where(x => x.IsActive || currentCompetencyId == x.CompetencyId)
+            .OrderBy(x => x.Code)
+            .ThenBy(x => x.Name)
+            .ToList();
+    }
+
+    private List<CompetencyModelItemAdminListItemDto> GetFilteredItems()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var query = _data.Items.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_itemSearch))
+        {
+            var search = _itemSearch.Trim();
+            query = query.Where(x =>
+                x.CompetencyCode.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.CompetencyName.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_requiredFilter))
+        {
+            query = _requiredFilter == "required"
+                ? query.Where(x => x.IsRequired)
+                : query.Where(x => !x.IsRequired);
+        }
+
+        return query
+            .OrderBy(x => x.CompetencyCode)
+            .ThenBy(x => x.CompetencyName)
+            .ToList();
+    }
+
+    private string BuildUrl(Guid modelId)
+    {
+        var url = QueryHelpers.AddQueryString("/admin/competency-models", "modelId", modelId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        return url;
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string FormatWeight(decimal? value)
+        => value.HasValue ? value.Value.ToString("0.##") : "-";
+
+    private static string GetDeleteModelTitle(CompetencyModelAdminListItemDto? item)
+    {
+        if (item is null)
+        {
+            return "Model non selezionato.";
+        }
+
+        if (item.CanDelete)
+        {
+            return "Rimuovi competency model.";
+        }
+
+        if (item.AssessmentCount > 0)
+        {
+            return "Non rimovibile: il model e usato da assessment.";
+        }
+
+        if (item.ItemCount > 0)
+        {
+            return "Non rimovibile: rimuovi prima gli item.";
+        }
+
+        return "Model non rimovibile.";
+    }
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("CompetencyModelIsUsedByAssessments", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il competency model e gia usato da assessment: la struttura non e modificabile.";
+        }
+
+        if (message.Contains("CompetencyModelHasItems", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il competency model ha ancora item: rimuovili prima di eliminare il model.";
+        }
+
+        if (message.Contains("CompetencyModelNameAlreadyExists", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Esiste gia un competency model con lo stesso nome.";
+        }
+
+        if (message.Contains("MinScoreGreaterThanMaxScore", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Min score non puo essere maggiore di max score.";
+        }
+
+        if (message.Contains("CompetencyNotFoundOrInactive", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Competency non trovata o non attiva.";
+        }
+
+        if (message.Contains("CompetencyModelItemAlreadyExists", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Questa competency e gia presente nel model selezionato.";
+        }
+
+        if (message.Contains("CompetencyModelTotalWeightExceeds100", StringComparison.OrdinalIgnoreCase))
+        {
+            return "La somma dei weight del model supera 100.";
+        }
+
+        if (message.Contains("CompetencyModelItemWeightOutOfRange", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Weight non valido: usa un valore tra 0 e 100.";
+        }
+
+        return message;
+    }
+
+    private class CompetencyModelFormModel
+    {
+        public Guid? ModelId { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string? Name { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string? ScaleType { get; set; } = "Numeric";
+
+        public int MinScore { get; set; } = 1;
+        public int MaxScore { get; set; } = 5;
+    }
+
+    private class CompetencyModelItemFormModel
+    {
+        public Guid? ModelItemId { get; set; }
+
+        [Required]
+        public string? CompetencyId { get; set; }
+
+        [Range(0, 100)]
+        public decimal? Weight { get; set; }
+
+        public bool IsRequired { get; set; } = true;
+    }
+}

@@ -61,21 +61,21 @@ Include:
 - STEP 36 completato: Goal catalog admin.
 - STEP 37 completato: Goal assignment admin.
 - STEP 38 completato: Competency catalog admin.
+- STEP 39 completato: Competency model admin.
 
 ## Prossimo step consigliato
 
-### STEP 39 - Competency model admin
+### STEP 40 - Assessment setup admin
 
 Obiettivo:
-- gestire i modelli competenze da UI.
+- configurare generazione e responsabilita assessment per ciclo.
 
 Include:
-- create/edit model.
-- min/max score.
-- righe model item.
-- required.
-- weight.
-- ordinamento competenze.
+- assessment type.
+- target/evaluator.
+- model associato.
+- generazione assessment per participant.
+- rigenerazione controllata solo se sicura.
 
 ---
 
