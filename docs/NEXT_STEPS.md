@@ -57,20 +57,21 @@ Include:
 - STEP 32 completato: Org chart e struttura organizzativa read-only.
 - STEP 33 completato: Manager relations admin hardening.
 - STEP 34 completato: Cycle management hardening.
+- STEP 35 completato: Cycle participants admin hardening.
 
 ## Prossimo step consigliato
 
-### STEP 35 - Cycle participants admin hardening
+### STEP 36 - Goal catalog admin
 
 Obiettivo:
-- completare la gestione partecipanti ciclo oltre la base gia presente.
+- gestire il catalogo goal da UI.
 
 Include:
-- ricerca employee.
-- bulk add da employee attivi.
-- reset fase controllato.
-- filtri per ciclo/status/fase.
-- protezioni se il ciclo e chiuso o contiene setup non modificabile.
+- lista goal di catalogo.
+- create/edit goal.
+- categorie o tag se utili.
+- stato attivo/non attivo.
+- descrizione e target metadata.
 
 ---
 

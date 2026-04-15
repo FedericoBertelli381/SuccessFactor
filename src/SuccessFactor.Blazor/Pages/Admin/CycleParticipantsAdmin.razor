@@ -12,7 +12,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h2 class="mb-1">Cycle Participants Admin</h2>
-            <div class="text-muted">Gestione base dei partecipanti ciclo.</div>
+            <div class="text-muted">Gestione partecipanti ciclo con ricerca, bulk add e reset fase controllato.</div>
         </div>
 
         <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
@@ -72,8 +72,19 @@
                             <div class="small text-muted mt-3">
                                 ciclo selezionato: @_data.SelectedCycleName
                                 <br />
+                                status: @_data.SelectedCycleStatus
+                                <br />
+                                fase ciclo: @GetSelectedCyclePhaseLabel()
+                                <br />
                                 partecipanti: @_data.Participants.Count
                             </div>
+
+                            @if (!_data.CanEditSelectedCycle)
+                            {
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    Il ciclo selezionato e chiuso: i participant non sono modificabili.
+                                </div>
+                            }
                         }
                     </div>
                 </div>
@@ -93,7 +104,7 @@
                             <div class="row g-3">
                                 <div class="col-12 col-md-5">
                                     <label class="form-label">Employee</label>
-                                    <InputSelect class="form-select" @bind-Value="_form.EmployeeId" disabled="@_form.ParticipantId.HasValue">
+                                    <InputSelect class="form-select" @bind-Value="_form.EmployeeId" disabled="@(_form.ParticipantId.HasValue || !CanEditSelectedCycle())">
                                         <option value="">Seleziona employee</option>
                                         @foreach (var employee in GetAvailableEmployees())
                                         {
@@ -103,7 +114,7 @@
                                 </div>
                                 <div class="col-12 col-md-4">
                                     <label class="form-label">Current phase</label>
-                                    <InputSelect class="form-select" @bind-Value="_form.CurrentPhaseId">
+                                    <InputSelect class="form-select" @bind-Value="_form.CurrentPhaseId" disabled="@(!CanEditSelectedCycle())">
                                         <option value="">-</option>
                                         @foreach (var phase in _data.Phases)
                                         {
@@ -113,7 +124,7 @@
                                 </div>
                                 <div class="col-12 col-md-3">
                                     <label class="form-label">Status</label>
-                                    <InputSelect class="form-select" @bind-Value="_form.Status">
+                                    <InputSelect class="form-select" @bind-Value="_form.Status" disabled="@(!CanEditSelectedCycle())">
                                         <option value="Active">Active</option>
                                         <option value="Completed">Completed</option>
                                         <option value="Excluded">Excluded</option>
@@ -122,7 +133,7 @@
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 mt-4">
-                                <button class="btn btn-primary" type="submit" disabled="@(_saving || !_data.SelectedCycleId.HasValue)">
+                                <button class="btn btn-primary" type="submit" disabled="@(_saving || !_data.SelectedCycleId.HasValue || !CanEditSelectedCycle())">
                                     @if (_saving)
                                     {
                                         <span class="spinner-border spinner-border-sm me-2"></span>
@@ -139,15 +150,90 @@
             </div>
         </div>
 
-        <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <strong>Partecipanti ciclo</strong>
-                <span class="badge text-bg-light">@_data.Participants.Count</span>
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <strong>Azioni bulk</strong>
             </div>
             <div class="card-body">
-                @if (_data.Participants.Count == 0)
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-lg-5">
+                        <label class="form-label">Fase da assegnare</label>
+                        <select class="form-select" @bind="_bulkPhaseId" disabled="@(!CanEditSelectedCycle())">
+                            <option value="">-</option>
+                            @foreach (var phase in _data.Phases)
+                            {
+                                <option value="@phase.PhaseId.ToString()">@phase.PhaseOrder - @phase.PhaseCode - @phase.PhaseName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12 col-lg-3">
+                        <label class="form-label">Status nuovi participant</label>
+                        <select class="form-select" @bind="_bulkStatus" disabled="@(!CanEditSelectedCycle())">
+                            <option value="Active">Active</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Excluded">Excluded</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-lg-4">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-outline-primary"
+                                    type="button"
+                                    disabled="@(_saving || !CanEditSelectedCycle())"
+                                    @onclick="BulkAddActiveEmployeesAsync">
+                                Aggiungi employee attivi mancanti
+                            </button>
+                            <button class="btn btn-outline-warning"
+                                    type="button"
+                                    disabled="@(_saving || !CanEditSelectedCycle() || string.IsNullOrWhiteSpace(_bulkPhaseId) || _data.Participants.Count == 0)"
+                                    @onclick="ResetParticipantsPhaseAsync">
+                                Allinea fase participant
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="small text-muted mt-3">
+                    Bulk add inserisce solo employee attivi non ancora presenti nel ciclo. Allinea fase aggiorna tutti i participant del ciclo selezionato alla fase indicata.
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <strong>Partecipanti ciclo</strong>
+                    <span class="badge text-bg-light">@GetFilteredParticipants().Count / @_data.Participants.Count</span>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-12 col-lg-6">
+                        <input class="form-control"
+                               placeholder="Cerca matricola, nome o email..."
+                               @bind="_participantSearch"
+                               @bind:event="oninput" />
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <select class="form-select" @bind="_statusFilter">
+                            <option value="">Tutti gli status</option>
+                            <option value="Active">Active</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Excluded">Excluded</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <select class="form-select" @bind="_phaseFilter">
+                            <option value="">Tutte le fasi</option>
+                            <option value="-">Senza fase</option>
+                            @foreach (var phase in _data.Phases)
+                            {
+                                <option value="@phase.PhaseId.ToString()">@phase.PhaseOrder - @phase.PhaseCode</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (GetFilteredParticipants().Count == 0)
                 {
-                    <div class="text-muted">Nessun partecipante nel ciclo selezionato.</div>
+                    <div class="text-muted">Nessun partecipante trovato con i filtri correnti.</div>
                 }
                 else
                 {
@@ -164,7 +250,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var item in _data.Participants)
+                                @foreach (var item in GetFilteredParticipants())
                                 {
                                     <tr class="@(_form.ParticipantId == item.ParticipantId ? "table-primary" : null)">
                                         <td>@item.Matricola</td>
@@ -180,7 +266,11 @@
                                         <td class="text-end">
                                             <div class="d-flex justify-content-end gap-2">
                                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(item.ParticipantId)">Rimuovi</button>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        disabled="@(!CanEditSelectedCycle())"
+                                                        @onclick="() => DeleteAsync(item.ParticipantId)">
+                                                    Rimuovi
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -205,6 +295,11 @@
     private Guid? _selectedCycleId;
     private CycleParticipantAdminDto? _data;
     private ParticipantFormModel _form = new();
+    private string? _participantSearch;
+    private string? _statusFilter;
+    private string? _phaseFilter;
+    private string? _bulkPhaseId;
+    private string _bulkStatus = "Active";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -226,6 +321,8 @@
         {
             _data = await AdminCycleParticipantAppService.GetAsync(_selectedCycleId);
             _selectedCycleId = _data.SelectedCycleId;
+            _bulkPhaseId ??= _data.SelectedCycleCurrentPhaseId?.ToString()
+                ?? _data.Phases.OrderBy(x => x.PhaseOrder).FirstOrDefault()?.PhaseId.ToString();
 
             if (!_form.ParticipantId.HasValue)
             {
@@ -234,7 +331,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = GetFriendlyErrorMessage(ex);
         }
         finally
         {
@@ -250,6 +347,7 @@
         }
 
         _selectedCycleId = cycleId;
+        _bulkPhaseId = null;
         ResetForm();
 
         NavigationManager.NavigateTo(BuildUrl(cycleId));
@@ -286,7 +384,84 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task BulkAddActiveEmployeesAsync()
+    {
+        if (_data is null || !_data.SelectedCycleId.HasValue)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var created = await AdminCycleParticipantAppService.BulkAddActiveEmployeesAsync(new BulkAddCycleParticipantsInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                CurrentPhaseId = ParseGuidOrNull(_bulkPhaseId),
+                Status = _bulkStatus
+            });
+
+            _successMessage = created == 0
+                ? "Nessun nuovo participant da aggiungere."
+                : $"{created} participant aggiunti correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ResetParticipantsPhaseAsync()
+    {
+        if (_data is null || !_data.SelectedCycleId.HasValue)
+        {
+            return;
+        }
+
+        var phaseId = ParseGuidOrNull(_bulkPhaseId);
+        if (!phaseId.HasValue)
+        {
+            _error = "Seleziona una fase prima di allineare i participant.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var updated = await AdminCycleParticipantAppService.ResetParticipantsPhaseAsync(new ResetCycleParticipantsPhaseInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                CurrentPhaseId = phaseId.Value
+            });
+
+            _successMessage = $"{updated} participant allineati alla fase selezionata.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
         }
         finally
         {
@@ -308,7 +483,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = GetFriendlyErrorMessage(ex);
         }
     }
 
@@ -330,6 +505,57 @@
             Status = "Active",
             CurrentPhaseId = _data?.Phases.OrderBy(x => x.PhaseOrder).FirstOrDefault()?.PhaseId.ToString()
         };
+    }
+
+    private bool CanEditSelectedCycle()
+        => _data?.CanEditSelectedCycle == true;
+
+    private string GetSelectedCyclePhaseLabel()
+    {
+        if (_data is null || !_data.SelectedCycleCurrentPhaseId.HasValue)
+        {
+            return "-";
+        }
+
+        return string.IsNullOrWhiteSpace(_data.SelectedCycleCurrentPhaseCode)
+            ? _data.SelectedCycleCurrentPhaseId.Value.ToString()
+            : $"{_data.SelectedCycleCurrentPhaseCode} - {_data.SelectedCycleCurrentPhaseName}";
+    }
+
+    private List<CycleParticipantAdminListItemDto> GetFilteredParticipants()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var query = _data.Participants.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_participantSearch))
+        {
+            var search = _participantSearch.Trim();
+            query = query.Where(x =>
+                x.Matricola.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.EmployeeName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(x.EmployeeEmail) && x.EmployeeEmail.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_statusFilter))
+        {
+            query = query.Where(x => string.Equals(x.Status, _statusFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_phaseFilter))
+        {
+            query = _phaseFilter == "-"
+                ? query.Where(x => !x.CurrentPhaseId.HasValue)
+                : query.Where(x => x.CurrentPhaseId == ParseGuidOrNull(_phaseFilter));
+        }
+
+        return query
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.EmployeeName)
+            .ToList();
     }
 
     private List<EmployeeAdminListItemDto> GetAvailableEmployees()
@@ -380,6 +606,38 @@
 
     private static Guid? ParseGuidOrNull(string? value)
         => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("ClosedCycleParticipantsCannotBeChanged", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il ciclo selezionato e chiuso: i participant non sono modificabili.";
+        }
+
+        if (message.Contains("CycleParticipantAlreadyExists", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il dipendente selezionato e gia participant del ciclo.";
+        }
+
+        if (message.Contains("EmployeeNotFoundOrInactive", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Employee non trovato o non attivo.";
+        }
+
+        if (message.Contains("PhaseNotInTemplate", StringComparison.OrdinalIgnoreCase))
+        {
+            return "La fase selezionata non appartiene al template del ciclo.";
+        }
+
+        if (message.Contains("CycleParticipantStatusInvalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Status participant non valido.";
+        }
+
+        return message;
+    }
 
     private class ParticipantFormModel
     {

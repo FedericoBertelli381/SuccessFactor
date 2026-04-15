@@ -18,6 +18,8 @@ namespace SuccessFactor.Admin;
 [Authorize]
 public class AdminCycleParticipantAppService : ApplicationService, IAdminCycleParticipantAppService
 {
+    private static readonly string[] AllowedParticipantStatuses = ["Active", "Completed", "Excluded"];
+
     private readonly ICurrentUser _currentUser;
     private readonly IAsyncQueryableExecuter _asyncExecuter;
     private readonly IRepository<Cycle, Guid> _cycleRepository;
@@ -90,11 +92,20 @@ public class AdminCycleParticipantAppService : ApplicationService, IAdminCyclePa
                     .OrderBy(x => x.EmployeeId));
         }
 
+        var selectedCycleCurrentPhase = selectedCycle?.CurrentPhaseId is null
+            ? null
+            : phases.FirstOrDefault(x => x.Id == selectedCycle.CurrentPhaseId.Value);
+
         return new CycleParticipantAdminDto
         {
             SelectedCycleId = selectedCycle?.Id,
             SelectedTemplateId = selectedCycle?.TemplateId,
             SelectedCycleName = selectedCycle?.Name,
+            SelectedCycleStatus = selectedCycle?.Status,
+            SelectedCycleCurrentPhaseId = selectedCycle?.CurrentPhaseId,
+            SelectedCycleCurrentPhaseCode = selectedCycleCurrentPhase?.Code,
+            SelectedCycleCurrentPhaseName = selectedCycleCurrentPhase?.Name,
+            CanEditSelectedCycle = selectedCycle is not null && !IsClosed(selectedCycle),
             Cycles = cycles.Select(x => MapCycle(x, templateById)).ToList(),
             Employees = employees.Select(MapEmployee).ToList(),
             Phases = phases.Select(x => new WorkflowPhaseLookupDto
@@ -120,6 +131,7 @@ public class AdminCycleParticipantAppService : ApplicationService, IAdminCyclePa
         NormalizeAndValidateInput(input);
 
         var cycle = await _cycleRepository.GetAsync(input.CycleId);
+        EnsureCycleEditable(cycle);
         await ValidateReferencesAsync(cycle, input);
 
         CycleParticipant entity;
@@ -169,10 +181,99 @@ public class AdminCycleParticipantAppService : ApplicationService, IAdminCyclePa
             phase is null ? new Dictionary<Guid, ProcessPhase>() : new Dictionary<Guid, ProcessPhase> { [phase.Id] = phase });
     }
 
+    public async Task<int> BulkAddActiveEmployeesAsync(BulkAddCycleParticipantsInput input)
+    {
+        EnsureTenantAndAdmin();
+        NormalizeAndValidateBulkInput(input);
+
+        var cycle = await _cycleRepository.GetAsync(input.CycleId);
+        EnsureCycleEditable(cycle);
+        await ValidatePhaseAsync(cycle, input.CurrentPhaseId);
+
+        var activeEmployees = await _employeeRepository.GetListAsync(x => x.IsActive);
+        if (activeEmployees.Count == 0)
+        {
+            return 0;
+        }
+
+        var existingParticipants = await _participantRepository.GetListAsync(x => x.CycleId == input.CycleId);
+        var existingEmployeeIds = existingParticipants.Select(x => x.EmployeeId).ToHashSet();
+        var employeesToAdd = activeEmployees
+            .Where(x => !existingEmployeeIds.Contains(x.Id))
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.FullName)
+            .ToList();
+
+        if (employeesToAdd.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var employee in employeesToAdd)
+        {
+            await _participantRepository.InsertAsync(new CycleParticipant
+            {
+                TenantId = CurrentTenant.Id,
+                CycleId = input.CycleId,
+                EmployeeId = employee.Id,
+                CurrentPhaseId = input.CurrentPhaseId,
+                Status = input.Status
+            }, autoSave: false);
+        }
+
+        if (CurrentUnitOfWork is null)
+        {
+            throw new BusinessException("UnitOfWorkMissing");
+        }
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        return employeesToAdd.Count;
+    }
+
+    public async Task<int> ResetParticipantsPhaseAsync(ResetCycleParticipantsPhaseInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input.CycleId == Guid.Empty)
+        {
+            throw new BusinessException("CycleIdRequired");
+        }
+
+        if (input.CurrentPhaseId == Guid.Empty)
+        {
+            throw new BusinessException("CurrentPhaseIdRequired");
+        }
+
+        var cycle = await _cycleRepository.GetAsync(input.CycleId);
+        EnsureCycleEditable(cycle);
+        await ValidatePhaseAsync(cycle, input.CurrentPhaseId);
+
+        var participants = await _participantRepository.GetListAsync(x => x.CycleId == input.CycleId);
+
+        foreach (var participant in participants)
+        {
+            participant.CurrentPhaseId = input.CurrentPhaseId;
+            await _participantRepository.UpdateAsync(participant, autoSave: false);
+        }
+
+        if (CurrentUnitOfWork is null)
+        {
+            throw new BusinessException("UnitOfWorkMissing");
+        }
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        return participants.Count;
+    }
+
     public async Task DeleteAsync(Guid participantId)
     {
         EnsureTenantAndAdmin();
-        await _participantRepository.DeleteAsync(participantId);
+
+        var participant = await _participantRepository.GetAsync(participantId);
+        var cycle = await _cycleRepository.GetAsync(participant.CycleId);
+        EnsureCycleEditable(cycle);
+
+        await _participantRepository.DeleteAsync(participant, autoSave: true);
     }
 
     private void EnsureTenantAndAdmin()
@@ -197,11 +298,32 @@ public class AdminCycleParticipantAppService : ApplicationService, IAdminCyclePa
             throw new BusinessException("EmployeeNotFoundOrInactive");
         }
 
-        if (input.CurrentPhaseId.HasValue &&
-            !await _phaseRepository.AnyAsync(x => x.Id == input.CurrentPhaseId.Value && x.TemplateId == cycle.TemplateId))
+        await ValidatePhaseAsync(cycle, input.CurrentPhaseId);
+    }
+
+    private async Task ValidatePhaseAsync(Cycle cycle, Guid? currentPhaseId)
+    {
+        if (currentPhaseId.HasValue &&
+            !await _phaseRepository.AnyAsync(x => x.Id == currentPhaseId.Value && x.TemplateId == cycle.TemplateId))
         {
             throw new BusinessException("PhaseNotInTemplate");
         }
+    }
+
+    private static void EnsureCycleEditable(Cycle cycle)
+    {
+        if (IsClosed(cycle))
+        {
+            throw new BusinessException("ClosedCycleParticipantsCannotBeChanged");
+        }
+    }
+
+    private static bool IsClosed(Cycle cycle)
+        => string.Equals(cycle.Status, "Closed", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAllowedParticipantStatus(string status)
+    {
+        return AllowedParticipantStatuses.Contains(status, StringComparer.OrdinalIgnoreCase);
     }
 
     private static Cycle? ResolveSelectedCycle(List<Cycle> cycles, Guid? cycleId)
@@ -244,10 +366,29 @@ public class AdminCycleParticipantAppService : ApplicationService, IAdminCyclePa
 
         input.Status = string.IsNullOrWhiteSpace(input.Status) ? "Active" : input.Status.Trim();
 
-        if (input.Status is not ("Active" or "Completed" or "Excluded"))
+        if (!IsAllowedParticipantStatus(input.Status))
         {
             throw new BusinessException("CycleParticipantStatusInvalid");
         }
+
+        input.Status = AllowedParticipantStatuses.First(x => string.Equals(x, input.Status, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void NormalizeAndValidateBulkInput(BulkAddCycleParticipantsInput input)
+    {
+        if (input.CycleId == Guid.Empty)
+        {
+            throw new BusinessException("CycleIdRequired");
+        }
+
+        input.Status = string.IsNullOrWhiteSpace(input.Status) ? "Active" : input.Status.Trim();
+
+        if (!IsAllowedParticipantStatus(input.Status))
+        {
+            throw new BusinessException("CycleParticipantStatusInvalid");
+        }
+
+        input.Status = AllowedParticipantStatuses.First(x => string.Equals(x, input.Status, StringComparison.OrdinalIgnoreCase));
     }
 
     private static CycleAdminListItemDto MapCycle(Cycle cycle, Dictionary<Guid, ProcessTemplate> templateById)
