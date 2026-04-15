@@ -19,6 +19,7 @@ public class SuccessFactorMenus
     public const string AdminPerformanceImport = Prefix + ".AdminPerformanceImport";
     public const string AdminReadiness = Prefix + ".AdminReadiness";
     public const string AdminGoalCatalog = Prefix + ".AdminGoalCatalog";
+    public const string AdminGoalAssignments = Prefix + ".AdminGoalAssignments";
 
     //Add your menu items here...
 

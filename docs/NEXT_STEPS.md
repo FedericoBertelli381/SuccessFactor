@@ -59,21 +59,22 @@ Include:
 - STEP 34 completato: Cycle management hardening.
 - STEP 35 completato: Cycle participants admin hardening.
 - STEP 36 completato: Goal catalog admin.
+- STEP 37 completato: Goal assignment admin.
 
 ## Prossimo step consigliato
 
-### STEP 37 - Goal assignment admin
+### STEP 38 - Competency catalog admin
 
 Obiettivo:
-- assegnare goal agli employee/cicli da UI.
+- gestire il catalogo competenze da UI.
 
 Include:
-- selezione ciclo.
-- selezione participant/employee.
-- assegnazione goal da catalogo.
-- weight, target value, due date.
-- validazione duplicati ciclo/employee/goal.
-- blocco modifiche su ciclo chiuso.
+- lista competenze.
+- create/edit competency.
+- code/name.
+- descrizione.
+- stato attivo/non attivo se supportato dal modello.
+- blocco delete se referenziata.
 
 ---
 

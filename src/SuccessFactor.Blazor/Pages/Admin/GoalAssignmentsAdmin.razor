@@ -1,0 +1,595 @@
+@page "/admin/goal-assignments"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Admin
+@inject IAdminGoalAssignmentAppService AdminGoalAssignmentAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Goal Assignments Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Goal Assignments Admin</h2>
+            <div class="text-muted">Assegnazione goal da catalogo ai participant del ciclo selezionato.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento goal assignments...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Selezione ciclo</strong>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">Ciclo</label>
+                        <select class="form-select"
+                                value="@(_selectedCycleId?.ToString() ?? string.Empty)"
+                                @onchange="OnCycleChangedAsync">
+                            @if (_data.Cycles.Count == 0)
+                            {
+                                <option value="">Nessun ciclo disponibile</option>
+                            }
+                            else
+                            {
+                                @foreach (var cycle in _data.Cycles)
+                                {
+                                    <option value="@cycle.CycleId">@cycle.Name (@cycle.CycleYear - @cycle.Status)</option>
+                                }
+                            }
+                        </select>
+
+                        @if (_data.SelectedCycleId.HasValue)
+                        {
+                            <div class="small text-muted mt-3">
+                                ciclo selezionato: @_data.SelectedCycleName
+                                <br />
+                                status: @_data.SelectedCycleStatus
+                                <br />
+                                participants: @_data.Participants.Count
+                                <br />
+                                assignments: @_data.Assignments.Count
+                            </div>
+
+                            @if (!_data.CanEditSelectedCycle)
+                            {
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    Il ciclo selezionato e chiuso: gli assignment non sono modificabili.
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.AssignmentId.HasValue ? "Modifica assignment" : "Nuovo assignment")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Participant</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.EmployeeId" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="">Seleziona participant</option>
+                                        @foreach (var participant in GetAvailableParticipantsForForm())
+                                        {
+                                            <option value="@participant.EmployeeId.ToString()">@participant.Matricola - @participant.EmployeeName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Goal</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.GoalId" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="">Seleziona goal</option>
+                                        @foreach (var goal in GetAvailableGoalsForForm())
+                                        {
+                                            <option value="@goal.GoalId.ToString()">@goal.Title (@(string.IsNullOrWhiteSpace(goal.Category) ? "-" : goal.Category))</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Weight</label>
+                                    <InputNumber class="form-control" @bind-Value="_form.Weight" disabled="@(!CanEditSelectedCycle())" />
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Target value</label>
+                                    <InputNumber class="form-control" @bind-Value="_form.TargetValue" disabled="@(!CanEditSelectedCycle())" />
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Status</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.Status" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="Draft">Draft</option>
+                                        <option value="Approved">Approved</option>
+                                        <option value="InProgress">InProgress</option>
+                                        <option value="Closed">Closed</option>
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Start date</label>
+                                    <InputDate class="form-control" @bind-Value="_form.StartDate" disabled="@(!CanEditSelectedCycle())" />
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Due date</label>
+                                    <InputDate class="form-control" @bind-Value="_form.DueDate" disabled="@(!CanEditSelectedCycle())" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@(_saving || !_data.SelectedCycleId.HasValue || !CanEditSelectedCycle())">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva assignment
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <strong>Goal assignments</strong>
+                    <span class="badge text-bg-light">@GetFilteredAssignments().Count / @_data.Assignments.Count</span>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-12 col-lg-5">
+                        <input class="form-control"
+                               placeholder="Cerca employee, matricola, goal o category..."
+                               @bind="_search"
+                               @bind:event="oninput" />
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <select class="form-select" @bind="_statusFilter">
+                            <option value="">Tutti gli status</option>
+                            <option value="Draft">Draft</option>
+                            <option value="Approved">Approved</option>
+                            <option value="InProgress">InProgress</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <select class="form-select" @bind="_participantFilter">
+                            <option value="">Tutti i participant</option>
+                            @foreach (var participant in _data.Participants)
+                            {
+                                <option value="@participant.EmployeeId.ToString()">@participant.Matricola - @participant.EmployeeName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (GetFilteredAssignments().Count == 0)
+                {
+                    <div class="text-muted">Nessun goal assignment trovato con i filtri correnti.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Goal</th>
+                                    <th>Weight</th>
+                                    <th>Target</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in GetFilteredAssignments())
+                                {
+                                    <tr class="@(_form.AssignmentId == item.AssignmentId ? "table-primary" : null)">
+                                        <td>
+                                            <div class="fw-semibold">@item.EmployeeName</div>
+                                            <div class="small text-muted">@item.Matricola</div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold">@item.GoalTitle</div>
+                                            <div class="small text-muted">@(string.IsNullOrWhiteSpace(item.GoalCategory) ? "-" : item.GoalCategory)</div>
+                                        </td>
+                                        <td>@item.Weight.ToString("0.##")</td>
+                                        <td>@FormatDecimal(item.TargetValue)</td>
+                                        <td>@FormatDateRange(item.StartDate, item.DueDate)</td>
+                                        <td><span class="badge text-bg-light">@item.Status</span></td>
+                                        <td class="text-end">
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        disabled="@(!CanEditSelectedCycle())"
+                                                        @onclick="() => DeleteAsync(item.AssignmentId)">
+                                                    Rimuovi
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private Guid? _selectedCycleId;
+    private GoalAssignmentAdminDto? _data;
+    private GoalAssignmentFormModel _form = new();
+    private string? _search;
+    private string? _statusFilter;
+    private string? _participantFilter;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedCycleId = CycleId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminGoalAssignmentAppService.GetAsync(_selectedCycleId);
+            _selectedCycleId = _data.SelectedCycleId;
+
+            if (!_form.AssignmentId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnCycleChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var cycleId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedCycleId = cycleId;
+        ResetForm();
+
+        NavigationManager.NavigateTo(BuildUrl(cycleId));
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_data is null || !_data.SelectedCycleId.HasValue)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminGoalAssignmentAppService.SaveAsync(_form.AssignmentId, new SaveGoalAssignmentAdminInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                EmployeeId = ParseGuidOrNull(_form.EmployeeId) ?? Guid.Empty,
+                GoalId = ParseGuidOrNull(_form.GoalId) ?? Guid.Empty,
+                Weight = _form.Weight,
+                TargetValue = _form.TargetValue,
+                StartDate = _form.StartDate,
+                DueDate = _form.DueDate,
+                Status = _form.Status ?? "Draft"
+            });
+
+            _successMessage = _form.AssignmentId.HasValue
+                ? "Goal assignment aggiornato correttamente."
+                : "Goal assignment creato correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid assignmentId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminGoalAssignmentAppService.DeleteAsync(assignmentId);
+            _successMessage = "Goal assignment rimosso correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+    }
+
+    private void Edit(GoalAssignmentAdminListItemDto item)
+    {
+        _form = new GoalAssignmentFormModel
+        {
+            AssignmentId = item.AssignmentId,
+            EmployeeId = item.EmployeeId.ToString(),
+            GoalId = item.GoalId.ToString(),
+            Weight = item.Weight,
+            TargetValue = item.TargetValue,
+            StartDate = item.StartDate,
+            DueDate = item.DueDate,
+            Status = item.Status
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new GoalAssignmentFormModel
+        {
+            Status = "Draft",
+            Weight = GetSelectedGoalDefaultWeight() ?? 0m
+        };
+    }
+
+    private bool CanEditSelectedCycle()
+        => _data?.CanEditSelectedCycle == true;
+
+    private decimal? GetSelectedGoalDefaultWeight()
+    {
+        if (_data is null)
+        {
+            return null;
+        }
+
+        var goalId = ParseGuidOrNull(_form.GoalId);
+        if (!goalId.HasValue)
+        {
+            return null;
+        }
+
+        return _data.Goals.FirstOrDefault(x => x.GoalId == goalId.Value)?.DefaultWeight;
+    }
+
+    private List<CycleParticipantAdminListItemDto> GetAvailableParticipantsForForm()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        return _data.Participants
+            .Where(x => !string.Equals(x.Status, "Excluded", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.EmployeeName)
+            .ToList();
+    }
+
+    private List<GoalCatalogAdminListItemDto> GetAvailableGoalsForForm()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        return _data.Goals
+            .Where(x => x.IsLibraryItem || _form.AssignmentId.HasValue && x.GoalId == ParseGuidOrNull(_form.GoalId))
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.Title)
+            .ToList();
+    }
+
+    private List<GoalAssignmentAdminListItemDto> GetFilteredAssignments()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var query = _data.Assignments.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var search = _search.Trim();
+            query = query.Where(x =>
+                x.Matricola.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.EmployeeName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.GoalTitle.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(x.GoalCategory) && x.GoalCategory.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_statusFilter))
+        {
+            query = query.Where(x => string.Equals(x.Status, _statusFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var participantId = ParseGuidOrNull(_participantFilter);
+        if (participantId.HasValue)
+        {
+            query = query.Where(x => x.EmployeeId == participantId.Value);
+        }
+
+        return query
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.EmployeeName)
+            .ThenBy(x => x.GoalTitle)
+            .ToList();
+    }
+
+    private string BuildUrl(Guid cycleId)
+    {
+        var url = QueryHelpers.AddQueryString("/admin/goal-assignments", "cycleId", cycleId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        return url;
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string FormatDateRange(DateOnly? startDate, DateOnly? dueDate)
+        => $"{FormatDate(startDate)} - {FormatDate(dueDate)}";
+
+    private static string FormatDate(DateOnly? value)
+        => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private static string FormatDecimal(decimal? value)
+        => value.HasValue ? value.Value.ToString("0.##") : "-";
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("ClosedCycleGoalAssignmentsCannotBeChanged", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il ciclo selezionato e chiuso: i goal assignment non sono modificabili.";
+        }
+
+        if (message.Contains("EmployeeIsNotActiveCycleParticipant", StringComparison.OrdinalIgnoreCase))
+        {
+            return "L'employee selezionato non e un participant attivo del ciclo.";
+        }
+
+        if (message.Contains("GoalAlreadyAssignedToEmployee", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Questo goal e gia assegnato all'employee nel ciclo selezionato.";
+        }
+
+        if (message.Contains("TotalWeightExceeds100", StringComparison.OrdinalIgnoreCase))
+        {
+            return "La somma dei pesi goal per questo employee/ciclo supera 100.";
+        }
+
+        if (message.Contains("StartDateAfterDueDate", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Start date non puo essere successiva alla due date.";
+        }
+
+        if (message.Contains("GoalAssignmentWeightOutOfRange", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Weight non valido: usa un valore tra 0 e 100.";
+        }
+
+        if (message.Contains("GoalAssignmentStatusInvalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Status assignment non valido.";
+        }
+
+        return message;
+    }
+
+    private class GoalAssignmentFormModel
+    {
+        public Guid? AssignmentId { get; set; }
+
+        [Required]
+        public string? EmployeeId { get; set; }
+
+        [Required]
+        public string? GoalId { get; set; }
+
+        [Range(0, 100)]
+        public decimal Weight { get; set; }
+
+        public decimal? TargetValue { get; set; }
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? DueDate { get; set; }
+
+        [Required]
+        public string? Status { get; set; } = "Draft";
+    }
+}
