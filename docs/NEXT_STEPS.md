@@ -60,21 +60,22 @@ Include:
 - STEP 35 completato: Cycle participants admin hardening.
 - STEP 36 completato: Goal catalog admin.
 - STEP 37 completato: Goal assignment admin.
+- STEP 38 completato: Competency catalog admin.
 
 ## Prossimo step consigliato
 
-### STEP 38 - Competency catalog admin
+### STEP 39 - Competency model admin
 
 Obiettivo:
-- gestire il catalogo competenze da UI.
+- gestire i modelli competenze da UI.
 
 Include:
-- lista competenze.
-- create/edit competency.
-- code/name.
-- descrizione.
-- stato attivo/non attivo se supportato dal modello.
-- blocco delete se referenziata.
+- create/edit model.
+- min/max score.
+- righe model item.
+- required.
+- weight.
+- ordinamento competenze.
 
 ---
 
