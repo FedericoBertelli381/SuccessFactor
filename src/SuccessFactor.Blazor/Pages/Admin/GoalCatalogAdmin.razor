@@ -1,0 +1,401 @@
+@page "/admin/goal-catalog"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using SuccessFactor.Admin
+@inject IAdminGoalCatalogAppService AdminGoalCatalogAppService
+
+<PageTitle>Goal Catalog Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Goal Catalog Admin</h2>
+            <div class="text-muted">Gestione catalogo goal del tenant con categorie, default weight e blocco delete se assegnato.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento goal catalog...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3">
+            <div class="col-12 col-xxl-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>@(_form.GoalId.HasValue ? "Modifica goal" : "Nuovo goal")</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Title</label>
+                                    <InputText class="form-control" @bind-Value="_form.Title" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Description</label>
+                                    <InputTextArea class="form-control" rows="4" @bind-Value="_form.Description" />
+                                </div>
+                                <div class="col-12 col-md-7">
+                                    <label class="form-label">Category</label>
+                                    <InputText class="form-control" list="goal-categories" @bind-Value="_form.Category" />
+                                    <datalist id="goal-categories">
+                                        @foreach (var category in _data.Categories)
+                                        {
+                                            <option value="@category"></option>
+                                        }
+                                    </datalist>
+                                </div>
+                                <div class="col-12 col-md-5">
+                                    <label class="form-label">Default weight</label>
+                                    <InputNumber class="form-control" @bind-Value="_form.DefaultWeight" />
+                                    <div class="form-text">Valore opzionale 0-100.</div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <InputCheckbox class="form-check-input" @bind-Value="_form.IsLibraryItem" />
+                                        <label class="form-check-label">Disponibile come library item</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Salva goal
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                            <strong>Goal catalog</strong>
+                            <span class="badge text-bg-light">@GetFilteredGoals().Count / @_data.Goals.Count</span>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-12 col-lg-5">
+                                <input class="form-control"
+                                       placeholder="Cerca title, description o category..."
+                                       @bind="_search"
+                                       @bind:event="oninput" />
+                            </div>
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <select class="form-select" @bind="_categoryFilter">
+                                    <option value="">Tutte le categorie</option>
+                                    <option value="-">Senza categoria</option>
+                                    @foreach (var category in _data.Categories)
+                                    {
+                                        <option value="@category">@category</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6 col-lg-3">
+                                <select class="form-select" @bind="_libraryFilter">
+                                    <option value="">Tutti</option>
+                                    <option value="library">Library item</option>
+                                    <option value="custom">Non library</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (GetFilteredGoals().Count == 0)
+                        {
+                            <div class="text-muted">Nessun goal trovato con i filtri correnti.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Goal</th>
+                                            <th>Category</th>
+                                            <th>Library</th>
+                                            <th>Weight</th>
+                                            <th>Assignments</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in GetFilteredGoals())
+                                        {
+                                            <tr class="@(_form.GoalId == item.GoalId ? "table-primary" : null)">
+                                                <td>
+                                                    <div class="fw-semibold">@item.Title</div>
+                                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                                    {
+                                                        <div class="small text-muted">@item.Description</div>
+                                                    }
+                                                </td>
+                                                <td>@(string.IsNullOrWhiteSpace(item.Category) ? "-" : item.Category)</td>
+                                                <td>
+                                                    <span class="badge @(item.IsLibraryItem ? "text-bg-success" : "text-bg-light")">
+                                                        @(item.IsLibraryItem ? "Yes" : "No")
+                                                    </span>
+                                                </td>
+                                                <td>@FormatWeight(item.DefaultWeight)</td>
+                                                <td>@item.AssignmentCount</td>
+                                                <td class="text-end">
+                                                    <div class="d-flex justify-content-end gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(item)">Modifica</button>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                disabled="@(!item.CanDelete)"
+                                                                title="@GetDeleteTitle(item)"
+                                                                @onclick="() => DeleteAsync(item.GoalId)">
+                                                            Rimuovi
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private GoalCatalogAdminDto? _data;
+    private GoalCatalogFormModel _form = new();
+    private string? _search;
+    private string? _categoryFilter;
+    private string? _libraryFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminGoalCatalogAppService.GetAsync();
+
+            if (!_form.GoalId.HasValue)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminGoalCatalogAppService.SaveAsync(_form.GoalId, new SaveGoalCatalogItemInput
+            {
+                Title = _form.Title ?? string.Empty,
+                Description = _form.Description,
+                Category = _form.Category,
+                IsLibraryItem = _form.IsLibraryItem,
+                DefaultWeight = _form.DefaultWeight
+            });
+
+            _successMessage = _form.GoalId.HasValue
+                ? "Goal aggiornato correttamente."
+                : "Goal creato correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid goalId)
+    {
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminGoalCatalogAppService.DeleteAsync(goalId);
+            _successMessage = "Goal rimosso correttamente.";
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+    }
+
+    private void Edit(GoalCatalogAdminListItemDto item)
+    {
+        _form = new GoalCatalogFormModel
+        {
+            GoalId = item.GoalId,
+            Title = item.Title,
+            Description = item.Description,
+            Category = item.Category,
+            IsLibraryItem = item.IsLibraryItem,
+            DefaultWeight = item.DefaultWeight
+        };
+    }
+
+    private void ResetForm()
+    {
+        _form = new GoalCatalogFormModel();
+    }
+
+    private List<GoalCatalogAdminListItemDto> GetFilteredGoals()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var query = _data.Goals.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var search = _search.Trim();
+            query = query.Where(x =>
+                x.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(x.Description) && x.Description.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(x.Category) && x.Category.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_categoryFilter))
+        {
+            query = _categoryFilter == "-"
+                ? query.Where(x => string.IsNullOrWhiteSpace(x.Category))
+                : query.Where(x => string.Equals(x.Category, _categoryFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_libraryFilter))
+        {
+            query = _libraryFilter == "library"
+                ? query.Where(x => x.IsLibraryItem)
+                : query.Where(x => !x.IsLibraryItem);
+        }
+
+        return query
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.Title)
+            .ToList();
+    }
+
+    private static string FormatWeight(decimal? value)
+        => value.HasValue ? value.Value.ToString("0.##") : "-";
+
+    private static string GetDeleteTitle(GoalCatalogAdminListItemDto item)
+        => item.CanDelete
+            ? "Rimuovi goal"
+            : "Non rimovibile: il goal e gia assegnato.";
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("GoalCatalogItemAlreadyExists", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Esiste gia un goal con lo stesso title e category.";
+        }
+
+        if (message.Contains("GoalHasAssignments", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il goal non puo essere rimosso: e gia assegnato ad almeno un employee/ciclo.";
+        }
+
+        if (message.Contains("GoalDefaultWeightOutOfRange", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Default weight non valido: usa un valore tra 0 e 100.";
+        }
+
+        return message;
+    }
+
+    private class GoalCatalogFormModel
+    {
+        public Guid? GoalId { get; set; }
+
+        [Required]
+        [StringLength(300)]
+        public string? Title { get; set; }
+
+        public string? Description { get; set; }
+
+        [StringLength(100)]
+        public string? Category { get; set; }
+
+        public bool IsLibraryItem { get; set; } = true;
+
+        [Range(0, 100)]
+        public decimal? DefaultWeight { get; set; }
+    }
+}

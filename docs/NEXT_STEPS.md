@@ -58,20 +58,22 @@ Include:
 - STEP 33 completato: Manager relations admin hardening.
 - STEP 34 completato: Cycle management hardening.
 - STEP 35 completato: Cycle participants admin hardening.
+- STEP 36 completato: Goal catalog admin.
 
 ## Prossimo step consigliato
 
-### STEP 36 - Goal catalog admin
+### STEP 37 - Goal assignment admin
 
 Obiettivo:
-- gestire il catalogo goal da UI.
+- assegnare goal agli employee/cicli da UI.
 
 Include:
-- lista goal di catalogo.
-- create/edit goal.
-- categorie o tag se utili.
-- stato attivo/non attivo.
-- descrizione e target metadata.
+- selezione ciclo.
+- selezione participant/employee.
+- assegnazione goal da catalogo.
+- weight, target value, due date.
+- validazione duplicati ciclo/employee/goal.
+- blocco modifiche su ciclo chiuso.
 
 ---
 
