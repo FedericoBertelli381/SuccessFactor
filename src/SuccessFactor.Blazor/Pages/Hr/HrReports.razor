@@ -1,0 +1,542 @@
+@page "/hr/reports"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Hr
+@inject IHrReportsAppService HrReportsAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>HR Reports</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">HR Reports</h2>
+            @if (_report is not null && _report.SelectedCycleId.HasValue)
+            {
+                <div class="text-muted">
+                    ciclo: @_report.SelectedCycleName
+                    <span class="mx-2">-</span>
+                    status: <strong>@_report.SelectedCycleStatus</strong>
+                </div>
+            }
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+    else if (_loading && _report is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento report HR...</span>
+        </div>
+    }
+    else if (_report is not null)
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <strong>Selezione ciclo</strong>
+            </div>
+            <div class="card-body">
+                @if (_report.Cycles.Count == 0)
+                {
+                    <div class="text-muted">Nessun ciclo disponibile.</div>
+                }
+                else
+                {
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Ciclo</label>
+                            <select class="form-select"
+                                    value="@(_selectedCycleId?.ToString() ?? string.Empty)"
+                                    @onchange="OnCycleChangedAsync">
+                                @foreach (var cycle in _report.Cycles)
+                                {
+                                    <option value="@cycle.CycleId">@cycle.CycleName (@cycle.CycleStatus)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <div class="small text-muted">
+                                Il report considera i participant del ciclo selezionato e le relazioni manager attive alla data odierna.
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Participants</div>
+                        <div class="fs-4 fw-semibold">@_report.TotalParticipants</div>
+                        <div class="small text-muted">Active @_report.ActiveParticipants</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Assessments</div>
+                        <div class="fs-4 fw-semibold">@_report.TotalAssessments</div>
+                        <div class="small text-muted">Draft @_report.DraftAssessments</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Submitted</div>
+                        <div class="fs-4 fw-semibold">@_report.SubmittedAssessments</div>
+                        <div class="small text-muted">Closed @_report.ClosedAssessments</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Required mancanti</div>
+                        <div class="fs-4 fw-semibold">@_report.AssessmentsWithMissingRequired</div>
+                        <div class="small text-muted">assessment incompleti</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Senza manager</div>
+                        <div class="fs-4 fw-semibold">@_report.EmployeesWithoutManagerCount</div>
+                        <div class="small text-muted">participant attivi</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Senza user link</div>
+                        <div class="fs-4 fw-semibold">@_report.EmployeesWithoutUserLinkCount</div>
+                        <div class="small text-muted">participant attivi</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Partecipanti per fase</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_report.Phases.Count == 0)
+                        {
+                            <div class="text-muted">Nessun participant nel ciclo selezionato.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Fase</th>
+                                            <th>Nome</th>
+                                            <th class="text-end">Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _report.Phases)
+                                        {
+                                            <tr>
+                                                <td><span class="badge text-bg-light">@row.PhaseCode</span></td>
+                                                <td>@row.PhaseName</td>
+                                                <td class="text-end">@row.Count</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Partecipanti per status</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_report.ParticipantStatuses.Count == 0)
+                        {
+                            <div class="text-muted">Nessuno status participant disponibile.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th class="text-end">Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _report.ParticipantStatuses)
+                                        {
+                                            <tr>
+                                                <td><span class="badge text-bg-light">@row.Status</span></td>
+                                                <td class="text-end">@row.Count</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Assessment per status</strong>
+                    </div>
+                    <div class="card-body">
+                        @RenderAssessmentGroupTable(_report.AssessmentStatuses, "Nessun assessment nel ciclo selezionato.")
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Assessment per type</strong>
+                    </div>
+                    <div class="card-body">
+                        @RenderAssessmentGroupTable(_report.AssessmentTypes, "Nessun assessment type disponibile.")
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <strong>Assessment con required mancanti</strong>
+                <span class="badge text-bg-light">@_report.MissingRequiredAssessments.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_report.MissingRequiredAssessments.Count == 0)
+                {
+                    <div class="text-muted">Nessun required mancante rilevato.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Evaluator</th>
+                                    <th>Type</th>
+                                    <th>Model</th>
+                                    <th>Status</th>
+                                    <th>Missing</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _report.MissingRequiredAssessments)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@item.EmployeeName</div>
+                                            <div class="small text-muted">@item.Matricola</div>
+                                        </td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.EvaluatorName) ? "-" : item.EvaluatorName)</td>
+                                        <td><span class="badge text-bg-light">@item.AssessmentType</span></td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.ModelName) ? "-" : item.ModelName)</td>
+                                        <td><span class="badge @GetStatusBadgeClass(item.Status)">@item.Status</span></td>
+                                        <td>@item.MissingRequiredCount / @item.RequiredItemsCount</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenAssessmentDetail(item)">
+                                                Apri detail
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Employee senza manager attivo</strong>
+                    </div>
+                    <div class="card-body">
+                        @RenderEmployeeIssues(_report.EmployeesWithoutManager, "Tutti i participant attivi hanno almeno un manager attivo.")
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Employee senza user link</strong>
+                    </div>
+                    <div class="card-body">
+                        @RenderEmployeeIssues(_report.EmployeesWithoutUserLink, "Tutti i participant attivi hanno un user link.")
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private Guid? _selectedCycleId;
+    private HrReportDto? _report;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedCycleId = CycleId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _report = await HrReportsAppService.GetAsync(new GetHrReportInput
+            {
+                CycleId = _selectedCycleId
+            });
+            _selectedCycleId = _report.SelectedCycleId;
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnCycleChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var cycleId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedCycleId = cycleId;
+        NavigationManager.NavigateTo(BuildUrl(cycleId));
+        return Task.CompletedTask;
+    }
+
+    private string BuildUrl(Guid cycleId)
+    {
+        var url = QueryHelpers.AddQueryString("/hr/reports", "cycleId", cycleId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        return url;
+    }
+
+    private void OpenAssessmentDetail(HrReportMissingRequiredAssessmentDto item)
+    {
+        var query = new Dictionary<string, string?>();
+
+        if (_selectedCycleId.HasValue)
+        {
+            query["cycleId"] = _selectedCycleId.Value.ToString();
+        }
+
+        var tenant = GetCurrentTenantFromUrl();
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            query["__tenant"] = tenant;
+        }
+
+        var url = QueryHelpers.AddQueryString($"/hr/assessments/{item.EmployeeId}/{item.AssessmentId}", query!);
+        NavigationManager.NavigateTo(url);
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private RenderFragment RenderAssessmentGroupTable(List<HrReportAssessmentGroupDto> rows, string emptyText) => builder =>
+    {
+        if (rows.Count == 0)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "text-muted");
+            builder.AddContent(2, emptyText);
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "class", "table-responsive");
+        builder.OpenElement(5, "table");
+        builder.AddAttribute(6, "class", "table table-sm align-middle");
+        builder.AddMarkupContent(7, "<thead><tr><th>Gruppo</th><th class=\"text-end\">Count</th></tr></thead>");
+        builder.OpenElement(8, "tbody");
+
+        var sequence = 9;
+        foreach (var row in rows)
+        {
+            builder.OpenElement(sequence++, "tr");
+            builder.OpenElement(sequence++, "td");
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "badge text-bg-light");
+            builder.AddContent(sequence++, row.Label);
+            builder.CloseElement();
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "td");
+            builder.AddAttribute(sequence++, "class", "text-end");
+            builder.AddContent(sequence++, row.Count);
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private RenderFragment RenderEmployeeIssues(List<HrReportEmployeeIssueDto> rows, string emptyText) => builder =>
+    {
+        if (rows.Count == 0)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "text-muted");
+            builder.AddContent(2, emptyText);
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(3, "div");
+        builder.AddAttribute(4, "class", "table-responsive");
+        builder.OpenElement(5, "table");
+        builder.AddAttribute(6, "class", "table table-sm align-middle");
+        builder.AddMarkupContent(7, "<thead><tr><th>Employee</th><th>Email</th><th>Issue</th></tr></thead>");
+        builder.OpenElement(8, "tbody");
+
+        var sequence = 9;
+        foreach (var row in rows)
+        {
+            builder.OpenElement(sequence++, "tr");
+            builder.OpenElement(sequence++, "td");
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "fw-semibold");
+            builder.AddContent(sequence++, row.FullName);
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "small text-muted");
+            builder.AddContent(sequence++, row.Matricola);
+            builder.CloseElement();
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "td");
+            builder.AddContent(sequence++, string.IsNullOrWhiteSpace(row.Email) ? "-" : row.Email);
+            builder.CloseElement();
+            builder.OpenElement(sequence++, "td");
+            builder.AddContent(sequence++, row.Issue);
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private static string GetStatusBadgeClass(string status)
+    {
+        if (string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return "text-bg-warning";
+        }
+
+        if (string.Equals(status, "Submitted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "text-bg-info";
+        }
+
+        if (string.Equals(status, "Closed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "text-bg-secondary";
+        }
+
+        return "text-bg-light";
+    }
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("CurrentUserIsNotHr", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Utente non autorizzato: serve ruolo HR o admin.";
+        }
+
+        if (message.Contains("TenantMissing", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tenant mancante nella richiesta.";
+        }
+
+        if (message.Contains("HrCycleNotFound", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Ciclo HR non trovato.";
+        }
+
+        return message;
+    }
+}

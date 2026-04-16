@@ -63,20 +63,21 @@ Include:
 - STEP 38 completato: Competency catalog admin.
 - STEP 39 completato: Competency model admin.
 - STEP 40 completato: Assessment setup admin.
+- STEP 41 completato: Reporting HR base.
 
 ## Prossimo step consigliato
 
-### STEP 41 - Reporting HR base
+### STEP 42 - Reporting manager base
 
 Obiettivo:
-- introdurre report operativi HR.
+- introdurre report per manager.
 
 Include:
-- stato partecipanti per ciclo/fase.
-- assessment draft/submitted/closed.
-- required mancanti.
-- employee senza manager.
-- employee senza user link.
+- stato team.
+- goal completion/progress.
+- assessment mancanti.
+- target in ritardo.
+- export dei dati team.
 
 ---
 
