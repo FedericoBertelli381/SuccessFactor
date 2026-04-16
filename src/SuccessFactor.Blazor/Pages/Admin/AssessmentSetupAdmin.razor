@@ -1,0 +1,577 @@
+@page "/admin/assessment-setup"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Admin
+@inject IAdminAssessmentSetupAppService AdminAssessmentSetupAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Assessment Setup Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Assessment Setup Admin</h2>
+            <div class="text-muted">Generazione assessment per ciclo, participant, evaluator e competency model.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success mb-4">@_successMessage</div>
+    }
+
+    @if (_loading && _data is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento assessment setup...</span>
+        </div>
+    }
+    else if (_data is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Selezione ciclo</strong>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">Ciclo</label>
+                        <select class="form-select"
+                                value="@(_selectedCycleId?.ToString() ?? string.Empty)"
+                                @onchange="OnCycleChangedAsync">
+                            @if (_data.Cycles.Count == 0)
+                            {
+                                <option value="">Nessun ciclo disponibile</option>
+                            }
+                            else
+                            {
+                                @foreach (var cycle in _data.Cycles)
+                                {
+                                    <option value="@cycle.CycleId">@cycle.Name (@cycle.CycleYear - @cycle.Status)</option>
+                                }
+                            }
+                        </select>
+
+                        @if (_data.SelectedCycleId.HasValue)
+                        {
+                            <div class="small text-muted mt-3">
+                                ciclo selezionato: @_data.SelectedCycleName
+                                <br />
+                                status: @_data.SelectedCycleStatus
+                                <br />
+                                participants: @_data.Participants.Count
+                                <br />
+                                assessment: @_data.Assessments.Count
+                            </div>
+
+                            @if (!_data.CanEditSelectedCycle)
+                            {
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    Il ciclo selezionato e chiuso: non e possibile generare o rigenerare assessment.
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Genera assessment</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_form" OnValidSubmit="GenerateAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Participant target</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.EmployeeId" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="">Seleziona participant</option>
+                                        @foreach (var participant in GetAvailableParticipantsForForm())
+                                        {
+                                            <option value="@participant.EmployeeId.ToString()">@participant.Matricola - @participant.EmployeeName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Evaluator</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.EvaluatorEmployeeId" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="">Seleziona evaluator</option>
+                                        @foreach (var evaluator in _data.Evaluators)
+                                        {
+                                            <option value="@evaluator.EmployeeId.ToString()">@evaluator.Matricola - @evaluator.FullName</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Assessment type</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.AssessmentType" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="Manager">Manager</option>
+                                        <option value="Self">Self</option>
+                                        <option value="Peer">Peer</option>
+                                        <option value="HR">HR</option>
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12 col-md-8">
+                                    <label class="form-label">Competency model</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.ModelId" disabled="@(!CanEditSelectedCycle())">
+                                        <option value="">Seleziona model</option>
+                                        @foreach (var model in GetAvailableModelsForForm())
+                                        {
+                                            <option value="@model.ModelId.ToString()">@model.Name (@model.ItemCount item)</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check">
+                                        <InputCheckbox class="form-check-input" @bind-Value="_form.SafeRegenerateDraft" disabled="@(!CanEditSelectedCycle())" />
+                                        <label class="form-check-label">
+                                            Se esiste gia un assessment Draft, aggiorna il model e aggiungi solo gli item mancanti.
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        La rigenerazione non cancella righe esistenti e non sovrascrive score/commenti.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mt-4">
+                                <button class="btn btn-primary" type="submit" disabled="@(_saving || !_data.SelectedCycleId.HasValue || !CanEditSelectedCycle())">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Genera assessment
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" @onclick="ResetForm">
+                                    Annulla
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <strong>Assessment del ciclo</strong>
+                    <span class="badge text-bg-light">@GetFilteredAssessments().Count / @_data.Assessments.Count</span>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-12 col-lg-5">
+                        <input class="form-control"
+                               placeholder="Cerca target, evaluator, matricola o model..."
+                               @bind="_search"
+                               @bind:event="oninput" />
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <select class="form-select" @bind="_typeFilter">
+                            <option value="">Tutti i type</option>
+                            <option value="Self">Self</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Peer">Peer</option>
+                            <option value="HR">HR</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <select class="form-select" @bind="_statusFilter">
+                            <option value="">Tutti gli status</option>
+                            <option value="Draft">Draft</option>
+                            <option value="Submitted">Submitted</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (GetFilteredAssessments().Count == 0)
+                {
+                    <div class="text-muted">Nessun assessment trovato con i filtri correnti.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Target</th>
+                                    <th>Evaluator</th>
+                                    <th>Type</th>
+                                    <th>Model</th>
+                                    <th>Items</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in GetFilteredAssessments())
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@item.EmployeeName</div>
+                                            <div class="small text-muted">@item.Matricola</div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold">@item.EvaluatorName</div>
+                                            <div class="small text-muted">@item.EvaluatorMatricola</div>
+                                        </td>
+                                        <td><span class="badge text-bg-light">@item.AssessmentType</span></td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.ModelName) ? "-" : item.ModelName)</td>
+                                        <td>
+                                            @item.ItemCount
+                                            @if (item.MissingModelItemCount > 0)
+                                            {
+                                                <span class="badge text-bg-warning ms-1">+@item.MissingModelItemCount missing</span>
+                                            }
+                                        </td>
+                                        <td><span class="badge @GetStatusBadgeClass(item.Status)">@item.Status</span></td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => UseAsTemplate(item)">
+                                                Usa come base
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private string? _successMessage;
+    private Guid? _selectedCycleId;
+    private AssessmentSetupAdminDto? _data;
+    private AssessmentSetupFormModel _form = new();
+    private string? _search;
+    private string? _typeFilter;
+    private string? _statusFilter;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedCycleId = CycleId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await AdminAssessmentSetupAppService.GetAsync(_selectedCycleId);
+            _selectedCycleId = _data.SelectedCycleId;
+
+            if (string.IsNullOrWhiteSpace(_form.AssessmentType))
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnCycleChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var cycleId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedCycleId = cycleId;
+        ResetForm();
+
+        NavigationManager.NavigateTo(BuildUrl(cycleId));
+        return Task.CompletedTask;
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_data is null || !_data.SelectedCycleId.HasValue)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await AdminAssessmentSetupAppService.GenerateAsync(new GenerateAssessmentSetupInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                EmployeeId = ParseGuidOrNull(_form.EmployeeId) ?? Guid.Empty,
+                EvaluatorEmployeeId = ParseGuidOrNull(_form.EvaluatorEmployeeId) ?? Guid.Empty,
+                ModelId = ParseGuidOrNull(_form.ModelId) ?? Guid.Empty,
+                AssessmentType = _form.AssessmentType ?? "Manager",
+                SafeRegenerateDraft = _form.SafeRegenerateDraft
+            });
+
+            _successMessage = _form.SafeRegenerateDraft
+                ? "Assessment generato o rigenerato in modo sicuro."
+                : "Assessment generato correttamente.";
+
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _form = new AssessmentSetupFormModel
+        {
+            AssessmentType = "Manager"
+        };
+    }
+
+    private void UseAsTemplate(AssessmentSetupAdminListItemDto item)
+    {
+        _form = new AssessmentSetupFormModel
+        {
+            EmployeeId = item.EmployeeId.ToString(),
+            EvaluatorEmployeeId = item.EvaluatorEmployeeId.ToString(),
+            ModelId = item.ModelId?.ToString(),
+            AssessmentType = item.AssessmentType,
+            SafeRegenerateDraft = item.CanSafeRegenerate
+        };
+    }
+
+    private bool CanEditSelectedCycle()
+        => _data?.CanEditSelectedCycle == true;
+
+    private List<CycleParticipantAdminListItemDto> GetAvailableParticipantsForForm()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        return _data.Participants
+            .Where(x => !string.Equals(x.Status, "Excluded", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.EmployeeName)
+            .ToList();
+    }
+
+    private List<CompetencyModelAdminListItemDto> GetAvailableModelsForForm()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        return _data.Models
+            .Where(x => x.ItemCount > 0)
+            .OrderBy(x => x.Name)
+            .ToList();
+    }
+
+    private List<AssessmentSetupAdminListItemDto> GetFilteredAssessments()
+    {
+        if (_data is null)
+        {
+            return [];
+        }
+
+        var query = _data.Assessments.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var search = _search.Trim();
+            query = query.Where(x =>
+                x.Matricola.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.EmployeeName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.EvaluatorMatricola.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.EvaluatorName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                x.ModelName.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_typeFilter))
+        {
+            query = query.Where(x => string.Equals(x.AssessmentType, _typeFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_statusFilter))
+        {
+            query = query.Where(x => string.Equals(x.Status, _statusFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return query
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.EmployeeName)
+            .ThenBy(x => x.AssessmentType)
+            .ThenBy(x => x.EvaluatorName)
+            .ToList();
+    }
+
+    private string BuildUrl(Guid cycleId)
+    {
+        var url = QueryHelpers.AddQueryString("/admin/assessment-setup", "cycleId", cycleId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        return url;
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string GetStatusBadgeClass(string status)
+    {
+        if (string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return "text-bg-warning";
+        }
+
+        if (string.Equals(status, "Submitted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "text-bg-info";
+        }
+
+        if (string.Equals(status, "Closed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "text-bg-secondary";
+        }
+
+        return "text-bg-light";
+    }
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("ClosedCycleAssessmentsCannotBeChanged", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il ciclo selezionato e chiuso: gli assessment non sono modificabili.";
+        }
+
+        if (message.Contains("EmployeeIsNotActiveCycleParticipant", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il target selezionato non e un participant attivo del ciclo.";
+        }
+
+        if (message.Contains("CompetencyModelHasNoItems", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Il competency model selezionato non contiene item.";
+        }
+
+        if (message.Contains("AssessmentAlreadyExists", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Esiste gia un assessment con stesso ciclo, target, evaluator e type. Attiva la rigenerazione sicura se vuoi aggiungere eventuali item mancanti.";
+        }
+
+        if (message.Contains("OnlyDraftAssessmentsCanBeRegenerated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Solo gli assessment in Draft possono essere rigenerati.";
+        }
+
+        if (message.Contains("SelfAssessmentEvaluatorMustBeTargetEmployee", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Per un assessment Self, evaluator e target devono coincidere.";
+        }
+
+        if (message.Contains("EmployeeNotFoundOrInactive", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Employee target non trovato o non attivo.";
+        }
+
+        if (message.Contains("EvaluatorNotFoundOrInactive", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Evaluator non trovato o non attivo.";
+        }
+
+        if (message.Contains("AssessmentTypeInvalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Assessment type non valido.";
+        }
+
+        return message;
+    }
+
+    private class AssessmentSetupFormModel
+    {
+        [Required]
+        public string? EmployeeId { get; set; }
+
+        [Required]
+        public string? EvaluatorEmployeeId { get; set; }
+
+        [Required]
+        public string? ModelId { get; set; }
+
+        [Required]
+        public string? AssessmentType { get; set; } = "Manager";
+
+        public bool SafeRegenerateDraft { get; set; }
+    }
+}

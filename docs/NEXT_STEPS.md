@@ -62,20 +62,21 @@ Include:
 - STEP 37 completato: Goal assignment admin.
 - STEP 38 completato: Competency catalog admin.
 - STEP 39 completato: Competency model admin.
+- STEP 40 completato: Assessment setup admin.
 
 ## Prossimo step consigliato
 
-### STEP 40 - Assessment setup admin
+### STEP 41 - Reporting HR base
 
 Obiettivo:
-- configurare generazione e responsabilita assessment per ciclo.
+- introdurre report operativi HR.
 
 Include:
-- assessment type.
-- target/evaluator.
-- model associato.
-- generazione assessment per participant.
-- rigenerazione controllata solo se sicura.
+- stato partecipanti per ciclo/fase.
+- assessment draft/submitted/closed.
+- required mancanti.
+- employee senza manager.
+- employee senza user link.
 
 ---
 

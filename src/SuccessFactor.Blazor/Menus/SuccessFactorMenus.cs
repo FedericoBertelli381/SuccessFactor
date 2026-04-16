@@ -22,6 +22,7 @@ public class SuccessFactorMenus
     public const string AdminGoalAssignments = Prefix + ".AdminGoalAssignments";
     public const string AdminCompetencyCatalog = Prefix + ".AdminCompetencyCatalog";
     public const string AdminCompetencyModels = Prefix + ".AdminCompetencyModels";
+    public const string AdminAssessmentSetup = Prefix + ".AdminAssessmentSetup";
 
     //Add your menu items here...
 

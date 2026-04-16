@@ -225,17 +225,28 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             18,
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminAssessmentSetup,
+                "Admin Assessment Setup",
+                "/admin/assessment-setup",
+                icon: "fas fa-clipboard-list",
+                order: 19
+            )
+        );
+
+        context.Menu.Items.Insert(
+            19,
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 19
+                order: 20
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 20;
+        administration.Order = 21;
     
         if (MultiTenancyConsts.IsEnabled)
         {
