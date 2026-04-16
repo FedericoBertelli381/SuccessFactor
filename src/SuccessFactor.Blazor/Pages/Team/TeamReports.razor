@@ -1,0 +1,519 @@
+@page "/team/reports"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
+@using SuccessFactor.Team
+@inject ITeamReportsAppService TeamReportsAppService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Team Reports</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Team Reports</h2>
+            @if (_report is not null)
+            {
+                <div class="text-muted">
+                    manager: @_report.ManagerEmployeeName
+                    @if (!string.IsNullOrWhiteSpace(_report.SelectedCycleName))
+                    {
+                        <span class="mx-2">-</span>
+                        <span>@_report.SelectedCycleName (@_report.SelectedCycleStatus)</span>
+                    }
+                </div>
+            }
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+    else if (_loading && _report is null)
+    {
+        <div class="d-flex align-items-center gap-2 py-4">
+            <div class="spinner-border" role="status"></div>
+            <span>Caricamento team reports...</span>
+        </div>
+    }
+    else if (_report is not null)
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <strong>Selezione ciclo</strong>
+            </div>
+            <div class="card-body">
+                @if (_report.Cycles.Count == 0)
+                {
+                    <div class="text-muted">Nessun ciclo disponibile.</div>
+                }
+                else
+                {
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-lg-6">
+                            <label class="form-label">Ciclo</label>
+                            <select class="form-select"
+                                    value="@(_selectedCycleId?.ToString() ?? string.Empty)"
+                                    @onchange="OnCycleChangedAsync">
+                                @foreach (var cycle in _report.Cycles)
+                                {
+                                    <option value="@cycle.CycleId">@cycle.CycleName (@cycle.CycleStatus)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-6">
+                            <div class="small text-muted">
+                                Il report usa solo i subordinati nel tuo perimetro manageriale da EmployeeManagers.
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Team members</div>
+                        <div class="fs-4 fw-semibold">@_report.TeamMemberCount</div>
+                        <div class="small text-muted">in scope</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Participants</div>
+                        <div class="fs-4 fw-semibold">@_report.ParticipantsInCycleCount</div>
+                        <div class="small text-muted">nel ciclo</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Goals</div>
+                        <div class="fs-4 fw-semibold">@_report.GoalAssignmentCount</div>
+                        <div class="small text-muted">@_report.OverdueGoalCount in ritardo</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Senza progress</div>
+                        <div class="fs-4 fw-semibold">@_report.GoalsWithoutProgressCount</div>
+                        <div class="small text-muted">goal assegnati</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Assessment issues</div>
+                        <div class="fs-4 fw-semibold">@_report.AssessmentIssueCount</div>
+                        <div class="small text-muted">@_report.AssessmentCount assessment</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-xl-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="text-muted small">Avg progress</div>
+                        <div class="fs-4 fw-semibold">@FormatPercent(_report.AverageLatestProgressPercent)</div>
+                        <div class="small text-muted">ultimo progress</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Team per fase</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_report.Phases.Count == 0)
+                        {
+                            <div class="text-muted">Nessun participant del team nel ciclo selezionato.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Fase</th>
+                                            <th>Nome</th>
+                                            <th class="text-end">Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _report.Phases)
+                                        {
+                                            <tr>
+                                                <td><span class="badge text-bg-light">@row.PhaseCode</span></td>
+                                                <td>@row.PhaseName</td>
+                                                <td class="text-end">@row.Count</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <strong>Goal per status</strong>
+                    </div>
+                    <div class="card-body">
+                        @if (_report.GoalStatuses.Count == 0)
+                        {
+                            <div class="text-muted">Nessun goal assegnato al team nel ciclo selezionato.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th class="text-end">Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _report.GoalStatuses)
+                                        {
+                                            <tr>
+                                                <td><span class="badge text-bg-light">@row.Status</span></td>
+                                                <td class="text-end">@row.Count</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <strong>Team overview</strong>
+            </div>
+            <div class="card-body">
+                @if (_report.Members.Count == 0)
+                {
+                    <div class="text-muted">Nessun subordinato nel perimetro manageriale.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Fase</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Goals</th>
+                                    <th class="text-end">Assessments</th>
+                                    <th class="text-end">Issues</th>
+                                    <th class="text-end">Avg progress</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var member in _report.Members)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@member.FullName</div>
+                                            <div class="small text-muted">@(string.IsNullOrWhiteSpace(member.Email) ? "-" : member.Email)</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge text-bg-light">@member.CurrentPhaseCode</span>
+                                            <div class="small text-muted">@member.CurrentPhaseName</div>
+                                        </td>
+                                        <td>@member.ParticipantStatus</td>
+                                        <td class="text-end">@member.GoalAssignmentCount</td>
+                                        <td class="text-end">@member.AssessmentCount</td>
+                                        <td class="text-end">@member.MissingRequiredAssessmentCount</td>
+                                        <td class="text-end">@FormatPercent(member.AverageLatestProgressPercent)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <strong>Goal issues</strong>
+                <span class="badge text-bg-light">@_report.GoalIssues.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_report.GoalIssues.Count == 0)
+                {
+                    <div class="text-muted">Nessun goal issue rilevato.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Goal</th>
+                                    <th>Status</th>
+                                    <th>Due date</th>
+                                    <th>Last progress</th>
+                                    <th>Issue</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _report.GoalIssues)
+                                {
+                                    <tr>
+                                        <td>@item.EmployeeName</td>
+                                        <td>@item.GoalTitle</td>
+                                        <td><span class="badge text-bg-light">@item.Status</span></td>
+                                        <td>@FormatDate(item.DueDate)</td>
+                                        <td>@FormatPercent(item.LastProgressPercent)</td>
+                                        <td>@item.Issue</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenGoalDetail(item)">
+                                                Apri goal
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <strong>Assessment issues</strong>
+                <span class="badge text-bg-light">@_report.AssessmentIssues.Count</span>
+            </div>
+            <div class="card-body">
+                @if (_report.AssessmentIssues.Count == 0)
+                {
+                    <div class="text-muted">Nessun assessment issue rilevato.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Model</th>
+                                    <th>Missing</th>
+                                    <th>Issue</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _report.AssessmentIssues)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@item.EmployeeName</div>
+                                            <div class="small text-muted">@(string.IsNullOrWhiteSpace(item.Email) ? "-" : item.Email)</div>
+                                        </td>
+                                        <td><span class="badge text-bg-light">@item.AssessmentType</span></td>
+                                        <td>@item.Status</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.ModelName) ? "-" : item.ModelName)</td>
+                                        <td>
+                                            @if (item.RequiredItemsCount == 0)
+                                            {
+                                                <span>-</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@item.MissingRequiredCount / @item.RequiredItemsCount</span>
+                                            }
+                                        </td>
+                                        <td>@item.Issue</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    disabled="@(!item.AssessmentId.HasValue)"
+                                                    @onclick="() => OpenAssessmentDetail(item)">
+                                                Apri assessment
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cycleId")]
+    public Guid? CycleId { get; set; }
+
+    private bool _loading;
+    private string? _error;
+    private Guid? _selectedCycleId;
+    private TeamReportDto? _report;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectedCycleId = CycleId;
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _report = await TeamReportsAppService.GetAsync(new GetTeamReportInput
+            {
+                CycleId = _selectedCycleId
+            });
+            _selectedCycleId = _report.SelectedCycleId;
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnCycleChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var cycleId))
+        {
+            return Task.CompletedTask;
+        }
+
+        _selectedCycleId = cycleId;
+        NavigationManager.NavigateTo(BuildUrl(cycleId));
+        return Task.CompletedTask;
+    }
+
+    private string BuildUrl(Guid cycleId)
+    {
+        var url = QueryHelpers.AddQueryString("/team/reports", "cycleId", cycleId.ToString());
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        return url;
+    }
+
+    private void OpenGoalDetail(TeamReportGoalIssueDto item)
+    {
+        var url = $"/team/goals/{item.EmployeeId}/{item.AssignmentId}";
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void OpenAssessmentDetail(TeamReportAssessmentIssueDto item)
+    {
+        if (!item.AssessmentId.HasValue)
+        {
+            return;
+        }
+
+        var url = $"/team/assessments/{item.EmployeeId}/{item.AssessmentId.Value}";
+        var tenant = GetCurrentTenantFromUrl();
+
+        if (!string.IsNullOrWhiteSpace(tenant))
+        {
+            url = QueryHelpers.AddQueryString(url, "__tenant", tenant);
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private string? GetCurrentTenantFromUrl()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("__tenant", out var tenantValues))
+        {
+            var tenant = tenantValues.ToString();
+            return string.IsNullOrWhiteSpace(tenant) ? null : tenant;
+        }
+
+        return null;
+    }
+
+    private static string FormatDate(DateOnly? value)
+        => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private static string FormatPercent(decimal? value)
+        => value.HasValue ? $"{value.Value:0.##}%" : "-";
+
+    private static string GetFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message;
+
+        if (message.Contains("EmployeeNotLinkedToUser", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Utente corrente non collegato a un employee.";
+        }
+
+        if (message.Contains("TargetEmployeeNotInManagerScope", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Target non nel perimetro manageriale.";
+        }
+
+        if (message.Contains("TeamReportCycleNotFound", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Ciclo non trovato.";
+        }
+
+        return message;
+    }
+}

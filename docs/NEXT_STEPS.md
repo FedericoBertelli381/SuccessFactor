@@ -64,20 +64,21 @@ Include:
 - STEP 39 completato: Competency model admin.
 - STEP 40 completato: Assessment setup admin.
 - STEP 41 completato: Reporting HR base.
+- STEP 42 completato: Reporting manager base.
 
 ## Prossimo step consigliato
 
-### STEP 42 - Reporting manager base
+### STEP 43 - Performance dashboard aggregata
 
 Obiettivo:
-- introdurre report per manager.
+- dare una vista aggregata utile a HR e direzione.
 
 Include:
-- stato team.
-- goal completion/progress.
-- assessment mancanti.
-- target in ritardo.
-- export dei dati team.
+- distribuzione score.
+- avanzamento ciclo.
+- andamento per OrgUnit.
+- andamento per JobRole.
+- KPI completamento.
 
 ---
 

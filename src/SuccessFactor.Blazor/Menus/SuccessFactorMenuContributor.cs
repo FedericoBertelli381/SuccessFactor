@@ -60,10 +60,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             3,
             new ApplicationMenuItem(
-                SuccessFactorMenus.Hr,
-                "HR",
-                "/hr",
-                icon: "fas fa-building",
+                SuccessFactorMenus.TeamReports,
+                "Team Reports",
+                "/team/reports",
+                icon: "fas fa-chart-line",
                 order: 4
             )
         );
@@ -71,10 +71,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             4,
             new ApplicationMenuItem(
-                SuccessFactorMenus.HrReports,
-                "HR Reports",
-                "/hr/reports",
-                icon: "fas fa-chart-bar",
+                SuccessFactorMenus.Hr,
+                "HR",
+                "/hr",
+                icon: "fas fa-building",
                 order: 5
             )
         );
@@ -82,10 +82,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             5,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminCycles,
-                "Admin Cycles",
-                "/admin/cycles",
-                icon: "fas fa-calendar-alt",
+                SuccessFactorMenus.HrReports,
+                "HR Reports",
+                "/hr/reports",
+                icon: "fas fa-chart-bar",
                 order: 6
             )
         );
@@ -93,10 +93,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             6,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminCycleParticipants,
-                "Admin Participants",
-                "/admin/cycle-participants",
-                icon: "fas fa-user-check",
+                SuccessFactorMenus.AdminCycles,
+                "Admin Cycles",
+                "/admin/cycles",
+                icon: "fas fa-calendar-alt",
                 order: 7
             )
         );
@@ -104,10 +104,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             7,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminManagerRelations,
-                "Admin Managers",
-                "/admin/manager-relations",
-                icon: "fas fa-user-tie",
+                SuccessFactorMenus.AdminCycleParticipants,
+                "Admin Participants",
+                "/admin/cycle-participants",
+                icon: "fas fa-user-check",
                 order: 8
             )
         );
@@ -115,10 +115,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             8,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminPerformanceImport,
-                "Admin Import",
-                "/admin/performance-import",
-                icon: "fas fa-file-import",
+                SuccessFactorMenus.AdminManagerRelations,
+                "Admin Managers",
+                "/admin/manager-relations",
+                icon: "fas fa-user-tie",
                 order: 9
             )
         );
@@ -126,10 +126,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             9,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminReadiness,
-                "Admin Readiness",
-                "/admin/readiness",
-                icon: "fas fa-clipboard-check",
+                SuccessFactorMenus.AdminPerformanceImport,
+                "Admin Import",
+                "/admin/performance-import",
+                icon: "fas fa-file-import",
                 order: 10
             )
         );
@@ -137,10 +137,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             10,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminWorkflow,
-                "Admin Workflow",
-                "/admin/workflow",
-                icon: "fas fa-sliders-h",
+                SuccessFactorMenus.AdminReadiness,
+                "Admin Readiness",
+                "/admin/readiness",
+                icon: "fas fa-clipboard-check",
                 order: 11
             )
         );
@@ -148,10 +148,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             11,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminEmployees,
-                "Admin Employees",
-                "/admin/employees",
-                icon: "fas fa-id-badge",
+                SuccessFactorMenus.AdminWorkflow,
+                "Admin Workflow",
+                "/admin/workflow",
+                icon: "fas fa-sliders-h",
                 order: 12
             )
         );
@@ -159,10 +159,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             12,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminOrgUnits,
-                "Admin OrgUnits",
-                "/admin/org-units",
-                icon: "fas fa-sitemap",
+                SuccessFactorMenus.AdminEmployees,
+                "Admin Employees",
+                "/admin/employees",
+                icon: "fas fa-id-badge",
                 order: 13
             )
         );
@@ -170,10 +170,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             13,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminOrgChart,
-                "Admin Org Chart",
-                "/admin/org-chart",
-                icon: "fas fa-project-diagram",
+                SuccessFactorMenus.AdminOrgUnits,
+                "Admin OrgUnits",
+                "/admin/org-units",
+                icon: "fas fa-sitemap",
                 order: 14
             )
         );
@@ -181,10 +181,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             14,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminJobRoles,
-                "Admin JobRoles",
-                "/admin/job-roles",
-                icon: "fas fa-briefcase",
+                SuccessFactorMenus.AdminOrgChart,
+                "Admin Org Chart",
+                "/admin/org-chart",
+                icon: "fas fa-project-diagram",
                 order: 15
             )
         );
@@ -192,10 +192,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             15,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminGoalCatalog,
-                "Admin Goal Catalog",
-                "/admin/goal-catalog",
-                icon: "fas fa-bullseye",
+                SuccessFactorMenus.AdminJobRoles,
+                "Admin JobRoles",
+                "/admin/job-roles",
+                icon: "fas fa-briefcase",
                 order: 16
             )
         );
@@ -203,10 +203,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             16,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminGoalAssignments,
-                "Admin Goal Assignments",
-                "/admin/goal-assignments",
-                icon: "fas fa-tasks",
+                SuccessFactorMenus.AdminGoalCatalog,
+                "Admin Goal Catalog",
+                "/admin/goal-catalog",
+                icon: "fas fa-bullseye",
                 order: 17
             )
         );
@@ -214,10 +214,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             17,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminCompetencyCatalog,
-                "Admin Competencies",
-                "/admin/competency-catalog",
-                icon: "fas fa-brain",
+                SuccessFactorMenus.AdminGoalAssignments,
+                "Admin Goal Assignments",
+                "/admin/goal-assignments",
+                icon: "fas fa-tasks",
                 order: 18
             )
         );
@@ -225,10 +225,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             18,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminCompetencyModels,
-                "Admin Competency Models",
-                "/admin/competency-models",
-                icon: "fas fa-layer-group",
+                SuccessFactorMenus.AdminCompetencyCatalog,
+                "Admin Competencies",
+                "/admin/competency-catalog",
+                icon: "fas fa-brain",
                 order: 19
             )
         );
@@ -236,10 +236,10 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             19,
             new ApplicationMenuItem(
-                SuccessFactorMenus.AdminAssessmentSetup,
-                "Admin Assessment Setup",
-                "/admin/assessment-setup",
-                icon: "fas fa-clipboard-list",
+                SuccessFactorMenus.AdminCompetencyModels,
+                "Admin Competency Models",
+                "/admin/competency-models",
+                icon: "fas fa-layer-group",
                 order: 20
             )
         );
@@ -247,17 +247,28 @@ public class SuccessFactorMenuContributor : IMenuContributor
         context.Menu.Items.Insert(
             20,
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminAssessmentSetup,
+                "Admin Assessment Setup",
+                "/admin/assessment-setup",
+                icon: "fas fa-clipboard-list",
+                order: 21
+            )
+        );
+
+        context.Menu.Items.Insert(
+            21,
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 21
+                order: 22
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 22;
+        administration.Order = 23;
     
         if (MultiTenancyConsts.IsEnabled)
         {
