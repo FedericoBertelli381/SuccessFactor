@@ -9,6 +9,7 @@ public class SuccessFactorMenus
     public const string TeamReports = Prefix + ".TeamReports";
     public const string Hr = Prefix + ".Hr";
     public const string HrReports = Prefix + ".HrReports";
+    public const string PerformanceDashboard = Prefix + ".PerformanceDashboard";
     public const string AdminWorkflow = Prefix + ".AdminWorkflow";
     public const string AdminIdentityLink = Prefix + ".AdminIdentityLink";
     public const string AdminEmployees = Prefix + ".AdminEmployees";

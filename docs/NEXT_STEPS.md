@@ -65,20 +65,22 @@ Include:
 - STEP 40 completato: Assessment setup admin.
 - STEP 41 completato: Reporting HR base.
 - STEP 42 completato: Reporting manager base.
+- STEP 43 completato: Performance dashboard aggregata.
 
 ## Prossimo step consigliato
 
-### STEP 43 - Performance dashboard aggregata
+### STEP 44 - Export Excel/CSV
 
 Obiettivo:
-- dare una vista aggregata utile a HR e direzione.
+- esportare dati principali per HR e admin.
 
 Include:
-- distribuzione score.
-- avanzamento ciclo.
-- andamento per OrgUnit.
-- andamento per JobRole.
-- KPI completamento.
+- export employee.
+- export participants.
+- export goals.
+- export assessments.
+- export report HR.
+- filtri ciclo/fase/OrgUnit/JobRole.
 
 ---
 
