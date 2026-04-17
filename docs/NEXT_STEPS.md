@@ -67,22 +67,24 @@ Include:
 - STEP 42 completato: Reporting manager base.
 - STEP 43 completato: Performance dashboard aggregata.
 - STEP 44 completato: Export CSV per HR/admin con filtri ciclo/fase/OrgUnit/JobRole.
+- STEP 45 completato: Import esteso performance con validazione no-partial-save.
 
 ## Prossimo step consigliato
 
-### STEP 45 - Import esteso performance
+### STEP 46 - SSO Active Directory / Entra ID readiness
 
 Obiettivo:
-- completare gli import oltre employee base.
+- consentire single sign-on aziendale.
 
 Include:
-- import OrgUnits.
-- import JobRoles.
-- import manager relations.
-- import cycle participants.
-- import goal assignments.
-- import competency catalog/model.
-- validazioni no-partial-save.
+- analisi provider target: Active Directory on-prem, ADFS o Microsoft Entra ID.
+- configurazione OpenID Connect/SAML secondo stack scelto.
+- mapping username/email.
+- mapping ruoli ABP da claim o gruppi AD.
+- fallback admin locale.
+- test login/logout.
+- test tenant e ruoli.
+- documentazione setup ambiente.
 
 ---
 

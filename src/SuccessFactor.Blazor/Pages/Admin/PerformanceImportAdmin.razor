@@ -26,6 +26,44 @@
         <div class="col-12 col-xxl-6">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import OrgUnits</strong>
+                    <span class="badge text-bg-light">OrgUnits</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Name;ParentName</code>. ParentName puo essere vuoto o <code>-</code>.
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="8"
+                              @bind="_orgUnitsContent"
+                              placeholder="Name;ParentName"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import JobRoles</strong>
+                    <span class="badge text-bg-light">JobRoles</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Name</code>.
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="8"
+                              @bind="_jobRolesContent"
+                              placeholder="Name"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <strong>Import participants</strong>
                     <span class="badge text-bg-light">CycleParticipants</span>
                 </div>
@@ -64,6 +102,67 @@
                 </div>
             </div>
         </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import goal assignments</strong>
+                    <span class="badge text-bg-light">GoalAssignments</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Cycle;EmployeeMatricola;Goal;Weight;TargetValue;StartDate;DueDate;Status</code>.
+                        <br />
+                        <span>Goal puo essere titolo univoco o Guid. Status: Draft, Approved, InProgress, Closed.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="10"
+                              @bind="_goalAssignmentsContent"
+                              placeholder="Cycle;EmployeeMatricola;Goal;Weight;TargetValue;StartDate;DueDate;Status"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import competency catalog</strong>
+                    <span class="badge text-bg-light">Competencies</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Code;Name;Description;IsActive</code>.
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="10"
+                              @bind="_competenciesContent"
+                              placeholder="Code;Name;Description;IsActive"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import competency models</strong>
+                    <span class="badge text-bg-light">CompetencyModels</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>ModelName;ScaleType;MinScore;MaxScore;CompetencyCode;Weight;IsRequired</code>.
+                        <br />
+                        <span>CompetencyCode puo essere vuoto per creare/aggiornare solo il model. I model gia usati da assessment non vengono modificati.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="10"
+                              @bind="_competencyModelsContent"
+                              placeholder="ModelName;ScaleType;MinScore;MaxScore;CompetencyCode;Weight;IsRequired"></textarea>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="card shadow-sm mt-4">
@@ -98,8 +197,15 @@
                         else
                         {
                             <span>
-                                Import completato. Participants creati: @_result.CreatedParticipants, aggiornati: @_result.UpdatedParticipants.
-                                Manager relations create: @_result.CreatedManagerRelations, aggiornate: @_result.UpdatedManagerRelations.
+                                Import completato.
+                                OrgUnits @_result.CreatedOrgUnits/@_result.UpdatedOrgUnits,
+                                JobRoles @_result.CreatedJobRoles/@_result.UpdatedJobRoles,
+                                Participants @_result.CreatedParticipants/@_result.UpdatedParticipants,
+                                Manager relations @_result.CreatedManagerRelations/@_result.UpdatedManagerRelations,
+                                Goal assignments @_result.CreatedGoalAssignments/@_result.UpdatedGoalAssignments,
+                                Competencies @_result.CreatedCompetencies/@_result.UpdatedCompetencies,
+                                Models @_result.CreatedCompetencyModels/@_result.UpdatedCompetencyModels,
+                                Model items @_result.CreatedCompetencyModelItems/@_result.UpdatedCompetencyModelItems.
                             </span>
                         }
                     </div>
@@ -138,8 +244,13 @@
 @code {
     private bool _importing;
     private bool _updateExisting = true;
+    private string? _orgUnitsContent;
+    private string? _jobRolesContent;
     private string? _participantsContent;
     private string? _managerRelationsContent;
+    private string? _goalAssignmentsContent;
+    private string? _competenciesContent;
+    private string? _competencyModelsContent;
     private string? _error;
     private string? _successMessage;
     private PerformanceSetupImportResultDto? _result;
@@ -155,8 +266,13 @@
         {
             _result = await PerformanceSetupImportAppService.ImportAsync(new ImportPerformanceSetupInput
             {
+                OrgUnitsContent = _orgUnitsContent,
+                JobRolesContent = _jobRolesContent,
                 ParticipantsContent = _participantsContent,
                 ManagerRelationsContent = _managerRelationsContent,
+                GoalAssignmentsContent = _goalAssignmentsContent,
+                CompetenciesContent = _competenciesContent,
+                CompetencyModelsContent = _competencyModelsContent,
                 UpdateExisting = _updateExisting
             });
 
@@ -176,5 +292,11 @@
     }
 
     private bool BothContentsAreEmpty()
-        => string.IsNullOrWhiteSpace(_participantsContent) && string.IsNullOrWhiteSpace(_managerRelationsContent);
+        => string.IsNullOrWhiteSpace(_orgUnitsContent) &&
+           string.IsNullOrWhiteSpace(_jobRolesContent) &&
+           string.IsNullOrWhiteSpace(_participantsContent) &&
+           string.IsNullOrWhiteSpace(_managerRelationsContent) &&
+           string.IsNullOrWhiteSpace(_goalAssignmentsContent) &&
+           string.IsNullOrWhiteSpace(_competenciesContent) &&
+           string.IsNullOrWhiteSpace(_competencyModelsContent);
 }
