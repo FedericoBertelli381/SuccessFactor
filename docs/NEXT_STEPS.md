@@ -68,23 +68,20 @@ Include:
 - STEP 43 completato: Performance dashboard aggregata.
 - STEP 44 completato: Export CSV per HR/admin con filtri ciclo/fase/OrgUnit/JobRole.
 - STEP 45 completato: Import esteso performance con validazione no-partial-save.
+- STEP 46 completato: SSO Active Directory / Entra ID readiness con OpenID Connect configurabile.
 
 ## Prossimo step consigliato
 
-### STEP 46 - SSO Active Directory / Entra ID readiness
+### STEP 47 - Role mapping e authorization hardening
 
 Obiettivo:
-- consentire single sign-on aziendale.
+- rendere robusta la gestione ruoli applicativi.
 
 Include:
-- analisi provider target: Active Directory on-prem, ADFS o Microsoft Entra ID.
-- configurazione OpenID Connect/SAML secondo stack scelto.
-- mapping username/email.
-- mapping ruoli ABP da claim o gruppi AD.
-- fallback admin locale.
-- test login/logout.
-- test tenant e ruoli.
-- documentazione setup ambiente.
+- mapping gruppi AD/Entra verso ruoli `Dipendente`, `Responsabile`, `HR`, `admin`.
+- revisione policy admin.
+- revisione accesso pagine.
+- test negativi per ruoli non autorizzati.
 
 ---
 
@@ -416,12 +413,14 @@ Include:
 
 Obiettivo:
 - validazione con utenti reali.
+- ricordare ed eseguire il test SSO Entra ID/ADFS rimandato dallo STEP 46.
 
 Include:
 - scenario employee.
 - scenario manager.
 - scenario HR.
 - scenario admin.
+- test SSO completo con provider aziendale reale.
 - raccolta feedback.
 - bugfix prioritari.
 

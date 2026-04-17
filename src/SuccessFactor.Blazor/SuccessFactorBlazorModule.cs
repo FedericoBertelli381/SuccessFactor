@@ -2,6 +2,7 @@
 using Blazorise.Bootstrap5;
 using Blazorise.Icons.FontAwesome;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.OpenApi;
 using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
@@ -22,6 +24,8 @@ using SuccessFactor.Localization;
 using SuccessFactor.MultiTenancy;
 using System;
 using System.IO;
+using System.Linq;
+using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 using Volo.Abp;
 using Volo.Abp.Account.Web;
@@ -196,6 +200,52 @@ public class SuccessFactorBlazorModule : AbpModule
     private void ConfigureAuthentication(ServiceConfigurationContext context)
     {
         context.Services.ForwardIdentityAuthenticationForBearer(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+
+        var configuration = context.Services.GetConfiguration();
+        var ssoSection = configuration.GetSection("Sso:OpenIdConnect");
+
+        if (ssoSection.GetValue<bool>("Enabled"))
+        {
+            context.Services
+                .AddAuthentication()
+                .AddOpenIdConnect(
+                    ssoSection["Scheme"] ?? "CorporateOidc",
+                    ssoSection["DisplayName"] ?? "Corporate SSO",
+                    options =>
+                    {
+                        options.Authority = ssoSection["Authority"];
+                        options.ClientId = ssoSection["ClientId"];
+                        options.ClientSecret = ssoSection["ClientSecret"];
+                        options.ResponseType = ssoSection["ResponseType"] ?? OpenIdConnectResponseType.Code;
+                        options.RequireHttpsMetadata = ssoSection.GetValue("RequireHttpsMetadata", true);
+                        options.SaveTokens = ssoSection.GetValue("SaveTokens", true);
+                        options.GetClaimsFromUserInfoEndpoint = ssoSection.GetValue("GetClaimsFromUserInfoEndpoint", true);
+                        options.CallbackPath = ssoSection["CallbackPath"] ?? "/signin-corporate-oidc";
+                        options.SignedOutCallbackPath = ssoSection["SignedOutCallbackPath"] ?? "/signout-corporate-oidc";
+
+                        options.Scope.Clear();
+                        foreach (var scope in ssoSection.GetSection("Scopes").GetChildren().Select(x => x.Value).Where(x => !string.IsNullOrWhiteSpace(x)))
+                        {
+                            options.Scope.Add(scope!);
+                        }
+
+                        options.TokenValidationParameters.NameClaimType = ssoSection["Claims:Name"] ?? ClaimTypes.Name;
+                        options.TokenValidationParameters.RoleClaimType = ssoSection["Claims:Role"] ?? ClaimTypes.Role;
+
+                        var emailClaim = ssoSection["Claims:Email"];
+                        if (!string.IsNullOrWhiteSpace(emailClaim))
+                        {
+                            options.ClaimActions.MapUniqueJsonKey(ClaimTypes.Email, emailClaim);
+                        }
+
+                        var userNameClaim = ssoSection["Claims:UserName"];
+                        if (!string.IsNullOrWhiteSpace(userNameClaim))
+                        {
+                            options.ClaimActions.MapUniqueJsonKey(AbpClaimTypes.UserName, userNameClaim);
+                        }
+                    });
+        }
+
         context.Services.Configure<AbpClaimsPrincipalFactoryOptions>(options =>
         {
             options.IsDynamicClaimsEnabled = true;
