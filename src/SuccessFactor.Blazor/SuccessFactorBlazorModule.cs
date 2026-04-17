@@ -244,6 +244,18 @@ public class SuccessFactorBlazorModule : AbpModule
                     bundle.AddFiles("/global-styles.css");
                 }
             );
+
+            options.ScriptBundles.Configure(
+                BlazorLeptonXLiteThemeBundles.Scripts.Global,
+                bundle =>
+                {
+                    bundle.AddFiles("/global-scripts.js");
+                    if (hostingEnvironment.IsDevelopment())
+                    {
+                        bundle.AddFiles("/dev-login-helper.js");
+                    }
+                }
+            );
         });
     }
 

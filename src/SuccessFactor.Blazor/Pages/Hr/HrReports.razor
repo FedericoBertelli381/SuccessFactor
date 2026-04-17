@@ -1,8 +1,10 @@
 @page "/hr/reports"
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.JSInterop
 @using SuccessFactor.Hr
 @inject IHrReportsAppService HrReportsAppService
+@inject IJSRuntime JsRuntime
 @inject NavigationManager NavigationManager
 
 <PageTitle>HR Reports</PageTitle>
@@ -73,6 +75,79 @@
                         </div>
                     </div>
                 }
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <strong>Export CSV</strong>
+                <button class="btn btn-primary"
+                        @onclick="ExportCsvAsync"
+                        disabled="@(_exporting || !_report.SelectedCycleId.HasValue)">
+                    @if (_exporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Scarica CSV
+                </button>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrWhiteSpace(_exportError))
+                {
+                    <div class="alert alert-danger mb-3">@_exportError</div>
+                }
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <label class="form-label">Dataset</label>
+                        <select class="form-select" @bind="_exportKind">
+                            <option value="@HrExportKind.Employees">Employee</option>
+                            <option value="@HrExportKind.Participants">Participants</option>
+                            <option value="@HrExportKind.Goals">Goals</option>
+                            <option value="@HrExportKind.Assessments">Assessments</option>
+                            <option value="@HrExportKind.HrReport">Report HR</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <label class="form-label">Fase</label>
+                        <select class="form-select"
+                                value="@(_exportPhaseId?.ToString() ?? string.Empty)"
+                                @onchange="e => _exportPhaseId = ParseNullableGuid(e.Value)">
+                            <option value="">Tutte</option>
+                            @foreach (var phase in _report.Phases.Where(x => x.PhaseId.HasValue))
+                            {
+                                <option value="@phase.PhaseId">@phase.PhaseCode - @phase.PhaseName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <label class="form-label">OrgUnit</label>
+                        <select class="form-select"
+                                value="@(_exportOrgUnitId?.ToString() ?? string.Empty)"
+                                @onchange="e => _exportOrgUnitId = ParseNullableGuid(e.Value)">
+                            <option value="">Tutte</option>
+                            @foreach (var orgUnit in _report.ExportOrgUnits)
+                            {
+                                <option value="@orgUnit.Id">@orgUnit.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <label class="form-label">JobRole</label>
+                        <select class="form-select"
+                                value="@(_exportJobRoleId?.ToString() ?? string.Empty)"
+                                @onchange="e => _exportJobRoleId = ParseNullableGuid(e.Value)">
+                            <option value="">Tutti</option>
+                            @foreach (var jobRole in _report.ExportJobRoles)
+                            {
+                                <option value="@jobRole.Id">@jobRole.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="small text-muted mt-3">
+                    I filtri usano il ciclo selezionato sopra; i CSV includono i record coerenti con fase, OrgUnit e JobRole.
+                </div>
             </div>
         </div>
 
@@ -317,7 +392,13 @@
 
     private bool _loading;
     private string? _error;
+    private string? _exportError;
+    private bool _exporting;
     private Guid? _selectedCycleId;
+    private Guid? _exportPhaseId;
+    private Guid? _exportOrgUnitId;
+    private Guid? _exportJobRoleId;
+    private HrExportKind _exportKind = HrExportKind.Employees;
     private HrReportDto? _report;
 
     protected override async Task OnParametersSetAsync()
@@ -351,6 +432,43 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_report?.SelectedCycleId is null)
+        {
+            return;
+        }
+
+        _exporting = true;
+        _exportError = null;
+
+        try
+        {
+            var file = await HrReportsAppService.ExportCsvAsync(new GetHrExportInput
+            {
+                ExportKind = _exportKind,
+                CycleId = _report.SelectedCycleId,
+                PhaseId = _exportPhaseId,
+                OrgUnitId = _exportOrgUnitId,
+                JobRoleId = _exportJobRoleId
+            });
+
+            await JsRuntime.InvokeVoidAsync(
+                "successFactorDownloadFile",
+                file.FileName,
+                file.ContentType,
+                Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex)
+        {
+            _exportError = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _exporting = false;
         }
     }
 
@@ -410,6 +528,11 @@
         }
 
         return null;
+    }
+
+    private static Guid? ParseNullableGuid(object? value)
+    {
+        return Guid.TryParse(value?.ToString(), out var guid) ? guid : null;
     }
 
     private RenderFragment RenderAssessmentGroupTable(List<HrReportAssessmentGroupDto> rows, string emptyText) => builder =>

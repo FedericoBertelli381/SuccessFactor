@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Competencies.Assessments;
 using SuccessFactor.Competencies.Models;
 using SuccessFactor.Cycles;
 using SuccessFactor.Employees;
+using SuccessFactor.Goals;
+using SuccessFactor.JobRoles;
+using SuccessFactor.OrgUnits;
 using SuccessFactor.Workflow;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -25,6 +29,10 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
     private readonly IRepository<CycleParticipant, Guid> _participantRepository;
     private readonly IRepository<Employee, Guid> _employeeRepository;
     private readonly IRepository<EmployeeManager, Guid> _managerRelationRepository;
+    private readonly IRepository<OrgUnit, Guid> _orgUnitRepository;
+    private readonly IRepository<JobRole, Guid> _jobRoleRepository;
+    private readonly IRepository<Goal, Guid> _goalRepository;
+    private readonly IRepository<GoalAssignment, Guid> _goalAssignmentRepository;
     private readonly IRepository<ProcessPhase, Guid> _phaseRepository;
     private readonly IRepository<CompetencyAssessment, Guid> _assessmentRepository;
     private readonly IRepository<CompetencyAssessmentItem, Guid> _assessmentItemRepository;
@@ -38,6 +46,10 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         IRepository<CycleParticipant, Guid> participantRepository,
         IRepository<Employee, Guid> employeeRepository,
         IRepository<EmployeeManager, Guid> managerRelationRepository,
+        IRepository<OrgUnit, Guid> orgUnitRepository,
+        IRepository<JobRole, Guid> jobRoleRepository,
+        IRepository<Goal, Guid> goalRepository,
+        IRepository<GoalAssignment, Guid> goalAssignmentRepository,
         IRepository<ProcessPhase, Guid> phaseRepository,
         IRepository<CompetencyAssessment, Guid> assessmentRepository,
         IRepository<CompetencyAssessmentItem, Guid> assessmentItemRepository,
@@ -50,6 +62,10 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         _participantRepository = participantRepository;
         _employeeRepository = employeeRepository;
         _managerRelationRepository = managerRelationRepository;
+        _orgUnitRepository = orgUnitRepository;
+        _jobRoleRepository = jobRoleRepository;
+        _goalRepository = goalRepository;
+        _goalAssignmentRepository = goalAssignmentRepository;
         _phaseRepository = phaseRepository;
         _assessmentRepository = assessmentRepository;
         _assessmentItemRepository = assessmentItemRepository;
@@ -81,7 +97,9 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
                 CycleName = x.Name,
                 CycleStatus = x.Status,
                 IsSelected = selectedCycle is not null && x.Id == selectedCycle.Id
-            }).ToList()
+            }).ToList(),
+            ExportOrgUnits = await LoadOrgUnitLookupsAsync(),
+            ExportJobRoles = await LoadJobRoleLookupsAsync()
         };
 
         if (selectedCycle is null)
@@ -147,6 +165,126 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         return dto;
     }
 
+    public async Task<HrExportFileDto> ExportCsvAsync(GetHrExportInput input)
+    {
+        EnsureTenantAndHrOrAdmin();
+        input ??= new GetHrExportInput();
+
+        var context = await BuildExportContextAsync(input);
+        var csv = input.ExportKind switch
+        {
+            HrExportKind.Employees => BuildEmployeesCsv(context),
+            HrExportKind.Participants => BuildParticipantsCsv(context),
+            HrExportKind.Goals => BuildGoalsCsv(context),
+            HrExportKind.Assessments => BuildAssessmentsCsv(context),
+            HrExportKind.HrReport => BuildHrReportCsv(context),
+            _ => throw new BusinessException("HrExportKindNotSupported")
+        };
+
+        return new HrExportFileDto
+        {
+            FileName = BuildExportFileName(input.ExportKind, context.SelectedCycle?.Name),
+            ContentType = "text/csv; charset=utf-8",
+            Content = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray()
+        };
+    }
+
+    private async Task<HrExportContext> BuildExportContextAsync(GetHrExportInput input)
+    {
+        var cycles = await _asyncExecuter.ToListAsync(
+            (await _cycleRepository.GetQueryableAsync())
+                .OrderByDescending(x => x.CycleYear)
+                .ThenByDescending(x => x.CreationTime)
+                .ThenBy(x => x.Name));
+        var selectedCycle = ResolveSelectedCycle(cycles, input.CycleId);
+
+        var participants = selectedCycle is null
+            ? new List<CycleParticipant>()
+            : await _asyncExecuter.ToListAsync(
+                (await _participantRepository.GetQueryableAsync())
+                    .Where(x => x.CycleId == selectedCycle.Id));
+
+        if (input.PhaseId.HasValue)
+        {
+            participants = participants.Where(x => x.CurrentPhaseId == input.PhaseId.Value).ToList();
+        }
+
+        var participantEmployeeIds = participants.Select(x => x.EmployeeId).Distinct().ToList();
+        var assignments = input.PhaseId.HasValue && participantEmployeeIds.Count == 0
+            ? new List<GoalAssignment>()
+            : await LoadGoalAssignmentsForExportAsync(selectedCycle?.Id, participantEmployeeIds);
+        var assessments = input.PhaseId.HasValue && participantEmployeeIds.Count == 0
+            ? new List<CompetencyAssessment>()
+            : await LoadAssessmentsForExportAsync(selectedCycle?.Id, participantEmployeeIds);
+
+        var employeeIds = participantEmployeeIds
+            .Concat(assignments.Select(x => x.EmployeeId))
+            .Concat(assessments.Select(x => x.EmployeeId))
+            .Concat(assessments.Select(x => x.EvaluatorEmployeeId))
+            .Distinct()
+            .ToList();
+
+        if (employeeIds.Count == 0 && input.ExportKind == HrExportKind.Employees && selectedCycle is null && !input.PhaseId.HasValue)
+        {
+            employeeIds = await _asyncExecuter.ToListAsync(
+                (await _employeeRepository.GetQueryableAsync()).Select(x => x.Id));
+        }
+
+        var employees = employeeIds.Count == 0
+            ? new List<Employee>()
+            : await _asyncExecuter.ToListAsync(
+                (await _employeeRepository.GetQueryableAsync())
+                    .Where(x => employeeIds.Contains(x.Id)));
+
+        employees = employees
+            .Where(x => (!input.OrgUnitId.HasValue || x.OrgUnitId == input.OrgUnitId.Value) &&
+                        (!input.JobRoleId.HasValue || x.JobRoleId == input.JobRoleId.Value))
+            .ToList();
+        var allowedEmployeeIds = employees.Select(x => x.Id).ToHashSet();
+
+        participants = participants.Where(x => allowedEmployeeIds.Contains(x.EmployeeId)).ToList();
+        assignments = assignments.Where(x => allowedEmployeeIds.Contains(x.EmployeeId)).ToList();
+        assessments = assessments.Where(x => allowedEmployeeIds.Contains(x.EmployeeId)).ToList();
+
+        var phases = await LoadPhasesAsync(participants);
+        var orgUnits = await _asyncExecuter.ToListAsync(await _orgUnitRepository.GetQueryableAsync());
+        var jobRoles = await _asyncExecuter.ToListAsync(await _jobRoleRepository.GetQueryableAsync());
+        var goals = await LoadGoalsForExportAsync(assignments);
+        var models = await LoadModelsAsync(assessments);
+        var assessmentItems = await LoadAssessmentItemsAsync(assessments);
+
+        return new HrExportContext(
+            selectedCycle,
+            employees,
+            participants,
+            phases,
+            orgUnits,
+            jobRoles,
+            assignments,
+            goals,
+            assessments,
+            assessmentItems,
+            models);
+    }
+
+    private async Task<List<HrExportLookupDto>> LoadOrgUnitLookupsAsync()
+    {
+        return (await _asyncExecuter.ToListAsync(
+                (await _orgUnitRepository.GetQueryableAsync())
+                    .OrderBy(x => x.Name)))
+            .Select(x => new HrExportLookupDto { Id = x.Id, Name = x.Name })
+            .ToList();
+    }
+
+    private async Task<List<HrExportLookupDto>> LoadJobRoleLookupsAsync()
+    {
+        return (await _asyncExecuter.ToListAsync(
+                (await _jobRoleRepository.GetQueryableAsync())
+                    .OrderBy(x => x.Name)))
+            .Select(x => new HrExportLookupDto { Id = x.Id, Name = x.Name })
+            .ToList();
+    }
+
     private async Task<List<ProcessPhase>> LoadPhasesAsync(List<CycleParticipant> participants)
     {
         var phaseIds = participants
@@ -207,6 +345,55 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         return await _asyncExecuter.ToListAsync(
             (await _modelItemRepository.GetQueryableAsync())
                 .Where(x => modelIds.Contains(x.ModelId)));
+    }
+
+    private async Task<List<GoalAssignment>> LoadGoalAssignmentsForExportAsync(Guid? cycleId, List<Guid> participantEmployeeIds)
+    {
+        if (!cycleId.HasValue)
+        {
+            return [];
+        }
+
+        var query = (await _goalAssignmentRepository.GetQueryableAsync())
+            .Where(x => x.CycleId == cycleId.Value);
+
+        if (participantEmployeeIds.Count > 0)
+        {
+            query = query.Where(x => participantEmployeeIds.Contains(x.EmployeeId));
+        }
+
+        return await _asyncExecuter.ToListAsync(query);
+    }
+
+    private async Task<List<Goal>> LoadGoalsForExportAsync(List<GoalAssignment> assignments)
+    {
+        var goalIds = assignments.Select(x => x.GoalId).Distinct().ToList();
+        if (goalIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await _asyncExecuter.ToListAsync(
+            (await _goalRepository.GetQueryableAsync())
+                .Where(x => goalIds.Contains(x.Id)));
+    }
+
+    private async Task<List<CompetencyAssessment>> LoadAssessmentsForExportAsync(Guid? cycleId, List<Guid> participantEmployeeIds)
+    {
+        if (!cycleId.HasValue)
+        {
+            return [];
+        }
+
+        var query = (await _assessmentRepository.GetQueryableAsync())
+            .Where(x => x.CycleId == cycleId.Value);
+
+        if (participantEmployeeIds.Count > 0)
+        {
+            query = query.Where(x => participantEmployeeIds.Contains(x.EmployeeId));
+        }
+
+        return await _asyncExecuter.ToListAsync(query);
     }
 
     private async Task<List<HrReportEmployeeIssueDto>> BuildEmployeesWithoutManagerAsync(
@@ -376,6 +563,236 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         };
     }
 
+    private static string BuildEmployeesCsv(HrExportContext context)
+    {
+        var orgUnitById = context.OrgUnits.ToDictionary(x => x.Id, x => x.Name);
+        var jobRoleById = context.JobRoles.ToDictionary(x => x.Id, x => x.Name);
+        var rows = context.Employees
+            .OrderBy(x => x.Matricola)
+            .ThenBy(x => x.FullName)
+            .Select(x => new[]
+            {
+                x.Id.ToString(),
+                x.Matricola,
+                x.FullName,
+                x.Email ?? string.Empty,
+                ResolveName(orgUnitById, x.OrgUnitId),
+                ResolveName(jobRoleById, x.JobRoleId),
+                x.IsActive ? "true" : "false",
+                x.UserId?.ToString() ?? string.Empty
+            });
+
+        return BuildCsv(
+            ["EmployeeId", "Matricola", "FullName", "Email", "OrgUnit", "JobRole", "IsActive", "UserId"],
+            rows);
+    }
+
+    private static string BuildParticipantsCsv(HrExportContext context)
+    {
+        var employeeById = context.Employees.ToDictionary(x => x.Id);
+        var phaseById = context.Phases.ToDictionary(x => x.Id);
+        var orgUnitById = context.OrgUnits.ToDictionary(x => x.Id, x => x.Name);
+        var jobRoleById = context.JobRoles.ToDictionary(x => x.Id, x => x.Name);
+        var rows = context.Participants
+            .OrderBy(x => GetEmployee(employeeById, x.EmployeeId)?.Matricola)
+            .ThenBy(x => GetEmployee(employeeById, x.EmployeeId)?.FullName)
+            .Select(x =>
+            {
+                var employee = GetEmployee(employeeById, x.EmployeeId);
+                var phase = x.CurrentPhaseId.HasValue && phaseById.TryGetValue(x.CurrentPhaseId.Value, out var currentPhase)
+                    ? currentPhase
+                    : null;
+
+                return new[]
+                {
+                    x.Id.ToString(),
+                    context.SelectedCycle?.Name ?? string.Empty,
+                    employee?.Matricola ?? string.Empty,
+                    employee?.FullName ?? string.Empty,
+                    employee?.Email ?? string.Empty,
+                    ResolveName(orgUnitById, employee?.OrgUnitId),
+                    ResolveName(jobRoleById, employee?.JobRoleId),
+                    phase?.Code ?? string.Empty,
+                    phase?.Name ?? string.Empty,
+                    x.Status,
+                    FormatDateTime(x.CreationTime)
+                };
+            });
+
+        return BuildCsv(
+            ["ParticipantId", "Cycle", "Matricola", "FullName", "Email", "OrgUnit", "JobRole", "PhaseCode", "PhaseName", "Status", "CreatedAt"],
+            rows);
+    }
+
+    private static string BuildGoalsCsv(HrExportContext context)
+    {
+        var employeeById = context.Employees.ToDictionary(x => x.Id);
+        var goalById = context.Goals.ToDictionary(x => x.Id);
+        var orgUnitById = context.OrgUnits.ToDictionary(x => x.Id, x => x.Name);
+        var jobRoleById = context.JobRoles.ToDictionary(x => x.Id, x => x.Name);
+        var rows = context.GoalAssignments
+            .OrderBy(x => GetEmployee(employeeById, x.EmployeeId)?.Matricola)
+            .ThenBy(x => GetGoal(goalById, x.GoalId)?.Title)
+            .Select(x =>
+            {
+                var employee = GetEmployee(employeeById, x.EmployeeId);
+                var goal = GetGoal(goalById, x.GoalId);
+
+                return new[]
+                {
+                    x.Id.ToString(),
+                    context.SelectedCycle?.Name ?? string.Empty,
+                    employee?.Matricola ?? string.Empty,
+                    employee?.FullName ?? string.Empty,
+                    ResolveName(orgUnitById, employee?.OrgUnitId),
+                    ResolveName(jobRoleById, employee?.JobRoleId),
+                    goal?.Title ?? string.Empty,
+                    goal?.Category ?? string.Empty,
+                    FormatDecimal(x.Weight),
+                    FormatDecimal(x.TargetValue),
+                    FormatDate(x.StartDate),
+                    FormatDate(x.DueDate),
+                    x.Status
+                };
+            });
+
+        return BuildCsv(
+            ["AssignmentId", "Cycle", "Matricola", "FullName", "OrgUnit", "JobRole", "Goal", "Category", "Weight", "TargetValue", "StartDate", "DueDate", "Status"],
+            rows);
+    }
+
+    private static string BuildAssessmentsCsv(HrExportContext context)
+    {
+        var employeeById = context.Employees.ToDictionary(x => x.Id);
+        var modelById = context.Models.ToDictionary(x => x.Id);
+        var orgUnitById = context.OrgUnits.ToDictionary(x => x.Id, x => x.Name);
+        var jobRoleById = context.JobRoles.ToDictionary(x => x.Id, x => x.Name);
+        var scoreByAssessmentId = context.AssessmentItems
+            .Where(x => x.Score.HasValue)
+            .GroupBy(x => x.AssessmentId)
+            .ToDictionary(x => x.Key, x => x.Average(i => (decimal)i.Score!.Value));
+        var rows = context.Assessments
+            .OrderBy(x => GetEmployee(employeeById, x.EmployeeId)?.Matricola)
+            .ThenBy(x => x.AssessmentType)
+            .Select(x =>
+            {
+                var employee = GetEmployee(employeeById, x.EmployeeId);
+                var evaluator = GetEmployee(employeeById, x.EvaluatorEmployeeId);
+                var model = x.ModelId.HasValue && modelById.TryGetValue(x.ModelId.Value, out var currentModel)
+                    ? currentModel
+                    : null;
+
+                return new[]
+                {
+                    x.Id.ToString(),
+                    context.SelectedCycle?.Name ?? string.Empty,
+                    employee?.Matricola ?? string.Empty,
+                    employee?.FullName ?? string.Empty,
+                    ResolveName(orgUnitById, employee?.OrgUnitId),
+                    ResolveName(jobRoleById, employee?.JobRoleId),
+                    evaluator?.FullName ?? string.Empty,
+                    x.AssessmentType,
+                    model?.Name ?? string.Empty,
+                    x.Status,
+                    scoreByAssessmentId.TryGetValue(x.Id, out var score) ? FormatDecimal(score) : string.Empty,
+                    FormatDateTime(x.CreationTime),
+                    FormatDateTime(x.LastModificationTime)
+                };
+            });
+
+        return BuildCsv(
+            ["AssessmentId", "Cycle", "Matricola", "FullName", "OrgUnit", "JobRole", "Evaluator", "AssessmentType", "Model", "Status", "AverageScore", "CreatedAt", "ModifiedAt"],
+            rows);
+    }
+
+    private static string BuildHrReportCsv(HrExportContext context)
+    {
+        var participantCount = context.Participants.Count;
+        var activeParticipantCount = context.Participants.Count(x => string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase));
+        var completedParticipantCount = context.Participants.Count(x => string.Equals(x.Status, "Completed", StringComparison.OrdinalIgnoreCase));
+        var excludedParticipantCount = context.Participants.Count(x => string.Equals(x.Status, "Excluded", StringComparison.OrdinalIgnoreCase));
+        var assessmentCount = context.Assessments.Count;
+        var draftAssessmentCount = context.Assessments.Count(x => string.Equals(x.Status, "Draft", StringComparison.OrdinalIgnoreCase));
+        var submittedAssessmentCount = context.Assessments.Count(x => string.Equals(x.Status, "Submitted", StringComparison.OrdinalIgnoreCase));
+        var closedAssessmentCount = context.Assessments.Count(x => string.Equals(x.Status, "Closed", StringComparison.OrdinalIgnoreCase));
+        var scoredItems = context.AssessmentItems.Where(x => x.Score.HasValue).ToList();
+        decimal? averageScore = scoredItems.Count == 0 ? null : scoredItems.Average(x => (decimal)x.Score!.Value);
+
+        return BuildCsv(
+            ["Metric", "Value"],
+            new[]
+            {
+                new[] { "Cycle", context.SelectedCycle?.Name ?? string.Empty },
+                new[] { "CycleStatus", context.SelectedCycle?.Status ?? string.Empty },
+                new[] { "Participants", participantCount.ToString() },
+                new[] { "ActiveParticipants", activeParticipantCount.ToString() },
+                new[] { "CompletedParticipants", completedParticipantCount.ToString() },
+                new[] { "ExcludedParticipants", excludedParticipantCount.ToString() },
+                new[] { "Assessments", assessmentCount.ToString() },
+                new[] { "DraftAssessments", draftAssessmentCount.ToString() },
+                new[] { "SubmittedAssessments", submittedAssessmentCount.ToString() },
+                new[] { "ClosedAssessments", closedAssessmentCount.ToString() },
+                new[] { "AverageScore", FormatDecimal(averageScore) }
+            });
+    }
+
+    private static string BuildCsv(string[] headers, IEnumerable<string[]> rows)
+    {
+        var builder = new StringBuilder();
+        AppendCsvRow(builder, headers);
+
+        foreach (var row in rows)
+        {
+            AppendCsvRow(builder, row);
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendCsvRow(StringBuilder builder, IEnumerable<string> values)
+    {
+        builder.AppendLine(string.Join(";", values.Select(EscapeCsv)));
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        value ??= string.Empty;
+        var mustQuote = value.Contains(';') || value.Contains('"') || value.Contains('\r') || value.Contains('\n');
+        value = value.Replace("\"", "\"\"");
+        return mustQuote ? $"\"{value}\"" : value;
+    }
+
+    private static string BuildExportFileName(HrExportKind kind, string? cycleName)
+    {
+        var cycle = SanitizeFileName(string.IsNullOrWhiteSpace(cycleName) ? "all" : cycleName);
+        return $"successfactor-{kind.ToString().ToLowerInvariant()}-{cycle}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidChars = System.IO.Path.GetInvalidFileNameChars().ToHashSet();
+        var chars = value.Select(x => invalidChars.Contains(x) || char.IsWhiteSpace(x) ? '-' : char.ToLowerInvariant(x)).ToArray();
+        return new string(chars).Trim('-');
+    }
+
+    private static Employee? GetEmployee(Dictionary<Guid, Employee> employeeById, Guid employeeId)
+        => employeeById.TryGetValue(employeeId, out var employee) ? employee : null;
+
+    private static Goal? GetGoal(Dictionary<Guid, Goal> goalById, Guid goalId)
+        => goalById.TryGetValue(goalId, out var goal) ? goal : null;
+
+    private static string ResolveName(Dictionary<Guid, string> namesById, Guid? id)
+        => id.HasValue && namesById.TryGetValue(id.Value, out var name) ? name : string.Empty;
+
+    private static string FormatDecimal(decimal? value)
+        => value.HasValue ? value.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+
+    private static string FormatDate(DateOnly? value)
+        => value?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static string FormatDateTime(DateTime? value)
+        => value?.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+
     private void EnsureTenantAndHrOrAdmin()
     {
         if (CurrentTenant.Id is null)
@@ -418,4 +835,17 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
             .ThenByDescending(x => x.CreationTime)
             .First();
     }
+
+    private sealed record HrExportContext(
+        Cycle? SelectedCycle,
+        List<Employee> Employees,
+        List<CycleParticipant> Participants,
+        List<ProcessPhase> Phases,
+        List<OrgUnit> OrgUnits,
+        List<JobRole> JobRoles,
+        List<GoalAssignment> GoalAssignments,
+        List<Goal> Goals,
+        List<CompetencyAssessment> Assessments,
+        List<CompetencyAssessmentItem> AssessmentItems,
+        List<CompetencyModel> Models);
 }

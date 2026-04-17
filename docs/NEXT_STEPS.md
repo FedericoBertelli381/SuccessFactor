@@ -66,21 +66,23 @@ Include:
 - STEP 41 completato: Reporting HR base.
 - STEP 42 completato: Reporting manager base.
 - STEP 43 completato: Performance dashboard aggregata.
+- STEP 44 completato: Export CSV per HR/admin con filtri ciclo/fase/OrgUnit/JobRole.
 
 ## Prossimo step consigliato
 
-### STEP 44 - Export Excel/CSV
+### STEP 45 - Import esteso performance
 
 Obiettivo:
-- esportare dati principali per HR e admin.
+- completare gli import oltre employee base.
 
 Include:
-- export employee.
-- export participants.
-- export goals.
-- export assessments.
-- export report HR.
-- filtri ciclo/fase/OrgUnit/JobRole.
+- import OrgUnits.
+- import JobRoles.
+- import manager relations.
+- import cycle participants.
+- import goal assignments.
+- import competency catalog/model.
+- validazioni no-partial-save.
 
 ---
 

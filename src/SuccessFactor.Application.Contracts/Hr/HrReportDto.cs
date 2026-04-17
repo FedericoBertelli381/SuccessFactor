@@ -29,4 +29,6 @@ public class HrReportDto
     public List<HrReportMissingRequiredAssessmentDto> MissingRequiredAssessments { get; set; } = [];
     public List<HrReportEmployeeIssueDto> EmployeesWithoutManager { get; set; } = [];
     public List<HrReportEmployeeIssueDto> EmployeesWithoutUserLink { get; set; } = [];
+    public List<HrExportLookupDto> ExportOrgUnits { get; set; } = [];
+    public List<HrExportLookupDto> ExportJobRoles { get; set; } = [];
 }
