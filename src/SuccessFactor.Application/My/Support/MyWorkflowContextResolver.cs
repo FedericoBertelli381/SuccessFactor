@@ -1,6 +1,7 @@
-﻿using SuccessFactor.Cycles;
+using SuccessFactor.Cycles;
 // TODO: sostituisci questi using con i namespace reali delle tue entity
 using SuccessFactor.Employees;
+using SuccessFactor.Security;
 using SuccessFactor.Workflow;
 using System;
 using System.Linq;
@@ -121,8 +122,7 @@ public class MyWorkflowContextResolver : IMyWorkflowContextResolver, ITransientD
 
     private string ResolveSelfRoleCode()
     {
-        var hasHrRole = _currentUser.Roles.Any(r =>
-            r.Contains("hr", StringComparison.OrdinalIgnoreCase));
+        var hasHrRole = SuccessFactorRoles.IsAdminOrHr(_currentUser.Roles);
 
         return hasHrRole ? "HR" : "Employee";
     }

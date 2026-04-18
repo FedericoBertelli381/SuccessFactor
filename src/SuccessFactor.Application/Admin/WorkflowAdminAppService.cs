@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Process;
+using SuccessFactor.Security;
 using SuccessFactor.Workflow;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -218,7 +219,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
         }

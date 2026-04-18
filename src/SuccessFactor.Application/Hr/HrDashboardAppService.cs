@@ -7,6 +7,7 @@ using SuccessFactor.Employees;
 using SuccessFactor.Goals;
 using SuccessFactor.My.Dtos;
 using SuccessFactor.My.Support;
+using SuccessFactor.Security;
 using SuccessFactor.Workflow;
 using System;
 using System.Collections.Generic;
@@ -538,7 +539,7 @@ public class HrDashboardAppService : ApplicationService, IHrDashboardAppService
     {
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("hr", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdminOrHr(roles))
         {
             throw new BusinessException("CurrentUserIsNotHr");
         }

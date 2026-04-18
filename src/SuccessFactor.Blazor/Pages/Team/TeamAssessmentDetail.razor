@@ -1,4 +1,5 @@
-ï»¿@page "/team/assessments/{TargetEmployeeId:guid}/{AssessmentId:guid}"
+@page "/team/assessments/{TargetEmployeeId:guid}/{AssessmentId:guid}"
+@attribute [Authorize(Roles = SuccessFactorRoles.AdminOrManager)]
 @using Microsoft.AspNetCore.WebUtilities
 @using SuccessFactor.My.Dtos
 @using SuccessFactor.Team
@@ -18,9 +19,9 @@
             {
                 <div class="text-muted">
                     @_assessment.AssessmentType
-                    <span class="mx-2">â€¢</span>
+                    <span class="mx-2">•</span>
                     @_assessment.TargetEmployeeName
-                    <span class="mx-2">â€¢</span>
+                    <span class="mx-2">•</span>
                     fase: <strong>@(_assessment.CurrentPhaseCode ?? "-")</strong>
                 </div>
             }
@@ -600,7 +601,7 @@
 
         if (HasDirtyItems())
         {
-            return "Il submit resta disabilitato finchÃ© esistono modifiche non salvate.";
+            return "Il submit resta disabilitato finché esistono modifiche non salvate.";
         }
 
         if (!_assessment.CanSubmit && _assessment.MissingRequiredCount > 0)
@@ -710,7 +711,7 @@
     private static string? NormalizeText(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static string YesNo(bool value) => value ? "SÃ¬" : "No";
+    private static string YesNo(bool value) => value ? "Sì" : "No";
 
     private static string FormatDecimal(decimal? value)
         => value?.ToString("0.##") ?? "-";

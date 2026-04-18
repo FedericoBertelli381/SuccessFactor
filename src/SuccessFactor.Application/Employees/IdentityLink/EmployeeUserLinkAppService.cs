@@ -7,6 +7,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using SuccessFactor.Employees;
+using SuccessFactor.Security;
 
 namespace SuccessFactor.Employees.IdentityLink;
 
@@ -174,7 +175,7 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
         var roles = CurrentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
         }

@@ -1,12 +1,13 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using SuccessFactor.Localization;
-using SuccessFactor.Permissions;
 using SuccessFactor.MultiTenancy;
-using Volo.Abp.Authorization.Permissions;
+using SuccessFactor.Security;
+using Microsoft.Extensions.DependencyInjection;
 using Volo.Abp.UI.Navigation;
 using Volo.Abp.SettingManagement.Blazor.Menus;
 using Volo.Abp.TenantManagement.Blazor.Navigation;
 using Volo.Abp.Identity.Blazor;
+using Volo.Abp.Users;
 
 namespace SuccessFactor.Blazor.Menus;
 
@@ -23,9 +24,12 @@ public class SuccessFactorMenuContributor : IMenuContributor
     private Task ConfigureMainMenuAsync(MenuConfigurationContext context)
     {
         var l = context.GetLocalizer<SuccessFactorResource>();
+        var currentUser = context.ServiceProvider.GetRequiredService<ICurrentUser>();
+        var isAdmin = SuccessFactorRoles.IsAdmin(currentUser.Roles);
+        var isHr = SuccessFactorRoles.IsHr(currentUser.Roles);
+        var isManager = SuccessFactorRoles.IsManager(currentUser.Roles);
         
-        context.Menu.Items.Insert(
-            0,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.Home,
                 l["Menu:Home"],
@@ -35,8 +39,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            1,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.My,
                 "My",
@@ -46,8 +49,9 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            2,
+        if (isAdmin || isManager)
+        {
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.Team,
                 "Team",
@@ -57,8 +61,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            3,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.TeamReports,
                 "Team Reports",
@@ -68,8 +71,11 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            4,
+        }
+
+        if (isAdmin || isHr)
+        {
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.Hr,
                 "HR",
@@ -79,8 +85,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            5,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.HrReports,
                 "HR Reports",
@@ -90,8 +95,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            6,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.PerformanceDashboard,
                 "Performance Dashboard",
@@ -101,8 +105,11 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            7,
+        }
+
+        if (isAdmin)
+        {
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminCycles,
                 "Admin Cycles",
@@ -112,8 +119,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            8,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminCycleParticipants,
                 "Admin Participants",
@@ -123,8 +129,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            9,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminManagerRelations,
                 "Admin Managers",
@@ -134,8 +139,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            10,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminPerformanceImport,
                 "Admin Import",
@@ -145,8 +149,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            11,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminReadiness,
                 "Admin Readiness",
@@ -156,8 +159,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            12,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminWorkflow,
                 "Admin Workflow",
@@ -167,8 +169,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            13,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminEmployees,
                 "Admin Employees",
@@ -178,8 +179,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            14,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminOrgUnits,
                 "Admin OrgUnits",
@@ -189,8 +189,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            15,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminOrgChart,
                 "Admin Org Chart",
@@ -200,8 +199,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            16,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminJobRoles,
                 "Admin JobRoles",
@@ -211,8 +209,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            17,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminGoalCatalog,
                 "Admin Goal Catalog",
@@ -222,8 +219,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            18,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminGoalAssignments,
                 "Admin Goal Assignments",
@@ -233,8 +229,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            19,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminCompetencyCatalog,
                 "Admin Competencies",
@@ -244,8 +239,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            20,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminCompetencyModels,
                 "Admin Competency Models",
@@ -255,8 +249,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            21,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminAssessmentSetup,
                 "Admin Assessment Setup",
@@ -266,8 +259,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
             )
         );
 
-        context.Menu.Items.Insert(
-            22,
+        context.Menu.Items.Add(
             new ApplicationMenuItem(
                 SuccessFactorMenus.AdminIdentityLink,
                 "Admin Users",
@@ -292,6 +284,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
 
         administration.SetSubItemOrder(IdentityMenuNames.GroupName, 2);
         administration.SetSubItemOrder(SettingManagementMenus.GroupName, 3);
+        }
 
         return Task.CompletedTask;
     }

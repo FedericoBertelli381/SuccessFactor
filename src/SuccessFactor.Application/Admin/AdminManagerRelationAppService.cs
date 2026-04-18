@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Employees;
+using SuccessFactor.Security;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -150,7 +151,7 @@ public class AdminManagerRelationAppService : ApplicationService, IAdminManagerR
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
         }

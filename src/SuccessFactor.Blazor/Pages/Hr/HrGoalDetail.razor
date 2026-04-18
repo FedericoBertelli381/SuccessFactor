@@ -1,4 +1,5 @@
 @page "/hr/goals/{TargetEmployeeId:guid}/{AssignmentId:guid}"
+@attribute [Authorize(Roles = SuccessFactorRoles.AdminOrHr)]
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.WebUtilities
 @using SuccessFactor.Goals

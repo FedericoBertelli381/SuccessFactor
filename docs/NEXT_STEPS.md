@@ -69,19 +69,23 @@ Include:
 - STEP 44 completato: Export CSV per HR/admin con filtri ciclo/fase/OrgUnit/JobRole.
 - STEP 45 completato: Import esteso performance con validazione no-partial-save.
 - STEP 46 completato: SSO Active Directory / Entra ID readiness con OpenID Connect configurabile.
+- STEP 47 completato: Role mapping e authorization hardening.
 
 ## Prossimo step consigliato
 
-### STEP 47 - Role mapping e authorization hardening
+### STEP 48 - Audit log e tracciamento azioni
 
 Obiettivo:
-- rendere robusta la gestione ruoli applicativi.
+- tracciare operazioni rilevanti.
 
 Include:
-- mapping gruppi AD/Entra verso ruoli `Dipendente`, `Responsabile`, `HR`, `admin`.
-- revisione policy admin.
-- revisione accesso pagine.
-- test negativi per ruoli non autorizzati.
+- edit assessment item.
+- submit assessment.
+- advance phase.
+- import dati.
+- modifiche admin workflow.
+- linking utenti.
+- export report.
 
 ---
 

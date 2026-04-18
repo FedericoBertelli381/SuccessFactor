@@ -1,4 +1,5 @@
-ï»¿@page "/team"
+@page "/team"
+@attribute [Authorize(Roles = SuccessFactorRoles.AdminOrManager)]
 @using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.AspNetCore.Components
 @using SuccessFactor.Team
@@ -23,12 +24,12 @@
                     manager: @_dashboard.ActorEmployeeName
                     @if (!string.IsNullOrWhiteSpace(_dashboard.CycleName))
                     {
-                        <span class="mx-2">â€¢</span>
+                        <span class="mx-2">•</span>
                         @_dashboard.CycleName
                     }
                     @if (!string.IsNullOrWhiteSpace(_dashboard.CurrentPhaseCode))
                     {
-                        <span class="mx-2">â€¢</span>
+                        <span class="mx-2">•</span>
                         <span>fase target: <strong>@_dashboard.CurrentPhaseCode</strong></span>
                                         }
                 </div>
@@ -227,8 +228,8 @@
                                             </div>
                                             <div class="small text-muted">
                                                 P:@item.ProgressPercentAccess
-                                                â€¢ A:@item.ActualValueAccess
-                                                â€¢ N:@item.NoteAccess
+                                                • A:@item.ActualValueAccess
+                                                • N:@item.NoteAccess
                                             </div>
                                         </td>
                                         <td class="text-end">
@@ -323,7 +324,7 @@
                                             </div>
                                             <div class="small text-muted">
                                                 S:@item.ScoreAccess
-                                                â€¢ C:@item.CommentAccess
+                                                • C:@item.CommentAccess
                                             </div>
                                         </td>
                                         <td class="text-end">
@@ -549,5 +550,5 @@
 
     private static string FormatDecimal(decimal? value)
         => value?.ToString("0.##") ?? "-";
-    private static string YesNo(bool value) => value ? "SÃ¬" : "No";
+    private static string YesNo(bool value) => value ? "Sì" : "No";
 }

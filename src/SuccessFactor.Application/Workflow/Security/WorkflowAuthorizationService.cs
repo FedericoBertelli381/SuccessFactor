@@ -1,4 +1,4 @@
-Ôªøusing System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,6 +10,7 @@ using Volo.Abp.Timing;
 using Volo.Abp.Users;
 using SuccessFactor.Cycles;
 using SuccessFactor.Employees;
+using SuccessFactor.Security;
 using SuccessFactor.Workflow;
 
 namespace SuccessFactor.Workflow.Security;
@@ -120,7 +121,7 @@ public class WorkflowAuthorizationService : ITransientDependency
     {
         var roles = (_currentUser.Roles ?? Array.Empty<string>()).ToArray();
 
-        if (roles.Any(r => r.Contains("hr", StringComparison.OrdinalIgnoreCase)))
+        if (SuccessFactorRoles.IsAdminOrHr(roles))
             return "HR";
 
         if (actorEmployeeId == targetEmployeeId)
@@ -185,8 +186,8 @@ public sealed class WorkflowAuthResult
         if (Policies.TryGetValue(fieldKey, out var p))
             return (p.Access, p.IsRequired);
 
-        // Default ‚Äúdev friendly‚Äù: se non hai policy, non blocchiamo per campo.
-        // La vera ‚Äúchiusura‚Äù la fai quando seed-i policies.
+        // Default ìdev friendlyî: se non hai policy, non blocchiamo per campo.
+        // La vera ìchiusuraî la fai quando seed-i policies.
         return ("Edit", false);
     }
 

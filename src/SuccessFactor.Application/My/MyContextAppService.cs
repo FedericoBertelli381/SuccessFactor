@@ -1,5 +1,6 @@
-﻿using SuccessFactor.Employees;
+using SuccessFactor.Employees;
 using SuccessFactor.My;
+using SuccessFactor.Security;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -38,7 +39,7 @@ public class MyContextAppService : ApplicationService
 
         var date = asOfDate ?? DateOnly.FromDateTime(Clock.Now);
 
-        // RoleCodes: Employee sempre, Manager se ha subordinati attivi, HR se ha ruolo ABP “hr”
+        // RoleCodes: Employee sempre, Manager se ha subordinati attivi, HR se ha ruolo ABP HR/admin.
         var abpRoles = (CurrentUser.Roles ?? Array.Empty<string>()).ToArray();
         var roleCodes = await ResolveRoleCodesAsync(emp.Id, abpRoles, date);
 
@@ -59,7 +60,7 @@ public class MyContextAppService : ApplicationService
 
     private async Task<string[]> ResolveRoleCodesAsync(Guid actorEmployeeId, string[] abpRoles, DateOnly date)
     {
-        bool isHr = abpRoles.Any(r => r.Contains("hr", StringComparison.OrdinalIgnoreCase));
+        bool isHr = SuccessFactorRoles.IsAdminOrHr(abpRoles);
 
         bool isManager = await _employeeManagerRepo.AnyAsync(x =>
             x.ManagerEmployeeId == actorEmployeeId &&

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Competencies.Models;
+using SuccessFactor.Security;
 using SuccessFactor.Competencies.Assessments;
 using SuccessFactor.Cycles;
 using SuccessFactor.Employees;
@@ -280,7 +281,7 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
         }

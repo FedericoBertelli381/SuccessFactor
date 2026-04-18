@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Competencies.Assessments;
+using SuccessFactor.Security;
 using SuccessFactor.Cycles;
 using SuccessFactor.Goals;
 using SuccessFactor.Process;
@@ -187,7 +188,7 @@ public class AdminCycleAppService : ApplicationService, IAdminCycleAppService
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
         }

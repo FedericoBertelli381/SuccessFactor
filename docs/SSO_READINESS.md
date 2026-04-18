@@ -85,8 +85,22 @@ Il linking applicativo esistente resta basato sugli utenti ABP collegati agli em
 Regola consigliata:
 - `preferred_username` o `email` deve corrispondere allo username/email ABP.
 - l'admin locale deve rimanere disponibile per emergenze e primo setup.
-- i ruoli ABP possono restare gestiti localmente nello step 46.
-- il mapping automatico gruppi/ruoli e previsto nello STEP 47.
+- i ruoli applicativi canonici sono `admin`, `HR`, `Responsabile`, `Dipendente`.
+- i claim esterni `role`, `roles`, `groups` vengono normalizzati verso i ruoli canonici quando combaciano con `Sso:RoleMappings`.
+- se Entra ID espone app roles, usare valori come `SuccessFactor.Admin`, `SuccessFactor.HR`, `SuccessFactor.Manager`, `SuccessFactor.Employee`.
+
+Esempio:
+
+```json
+"Sso": {
+  "RoleMappings": {
+    "admin": [ "SuccessFactor.Admin", "SF_Admin" ],
+    "HR": [ "SuccessFactor.HR", "SF_HR" ],
+    "Responsabile": [ "SuccessFactor.Manager", "SF_Manager" ],
+    "Dipendente": [ "SuccessFactor.Employee", "SF_Employee" ]
+  }
+}
+```
 
 ## Test
 
@@ -97,6 +111,8 @@ Smoke test minimi:
 - callback su `/signin-corporate-oidc` completa il login.
 - utente loggato accede a `/my` se collegato a un employee.
 - utente senza ruoli applicativi non accede alle pagine admin/HR/manager.
+- claim esterno `SuccessFactor.HR` abilita le pagine HR ma non le pagine Admin.
+- claim esterno `SuccessFactor.Manager` abilita le pagine Team ma non le pagine Admin/HR.
 - logout applicativo chiude la sessione locale.
 - fallback admin locale funziona anche se il provider esterno non e disponibile.
 

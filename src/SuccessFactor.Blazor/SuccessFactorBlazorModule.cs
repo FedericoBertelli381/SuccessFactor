@@ -18,6 +18,7 @@ using OpenIddict.Validation.AspNetCore;
 using SuccessFactor.Blazor.Components;
 using SuccessFactor.Blazor.HealthChecks;
 using SuccessFactor.Blazor.Menus;
+using SuccessFactor.Blazor.Security;
 using SuccessFactor.Competencies;
 using SuccessFactor.EntityFrameworkCore;
 using SuccessFactor.Localization;
@@ -200,6 +201,7 @@ public class SuccessFactorBlazorModule : AbpModule
     private void ConfigureAuthentication(ServiceConfigurationContext context)
     {
         context.Services.ForwardIdentityAuthenticationForBearer(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+        context.Services.AddTransient<IClaimsTransformation, CorporateSsoClaimsTransformation>();
 
         var configuration = context.Services.GetConfiguration();
         var ssoSection = configuration.GetSection("Sso:OpenIdConnect");

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Competencies;
+using SuccessFactor.Security;
 using SuccessFactor.Competencies.Assessments;
 using SuccessFactor.Competencies.Models;
 using Volo.Abp;
@@ -206,7 +207,7 @@ public class AdminCompetencyModelAppService : ApplicationService, IAdminCompeten
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
 
-        if (!roles.Any(x => x.Contains("admin", StringComparison.OrdinalIgnoreCase)))
+        if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
         }

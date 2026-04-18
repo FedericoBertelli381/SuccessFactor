@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -6,6 +6,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using SuccessFactor.Cycles;
 using SuccessFactor.Employees;
+using SuccessFactor.Security;
 
 namespace SuccessFactor.Workflow;
 
@@ -60,7 +61,7 @@ public class WorkflowAccessAppService : ApplicationService
         var templateId = cycle.TemplateId;
         var phaseId = participant.CurrentPhaseId.Value;
 
-        // decide RoleCodeUsed (priorità: HR > Manager > Employee(Self) > Employee(generic))
+        // decide RoleCodeUsed (priorit�: HR > Manager > Employee(Self) > Employee(generic))
         var roleCode = await ResolveRoleCodeForTargetAsync(actor.Id, targetEmployeeId, date);
 
         // permesso effettivo (role-specific o fallback "*")
@@ -108,7 +109,7 @@ public class WorkflowAccessAppService : ApplicationService
         var abpRoles = (CurrentUser.Roles ?? Array.Empty<string>()).ToArray();
 
         // HR se ruolo ABP contiene "hr"
-        if (abpRoles.Any(r => r.Contains("hr", StringComparison.OrdinalIgnoreCase)))
+        if (SuccessFactorRoles.IsAdminOrHr(abpRoles))
             return "HR";
 
         // Self

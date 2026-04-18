@@ -9,6 +9,7 @@ using SuccessFactor.Employees;
 using SuccessFactor.Goals;
 using SuccessFactor.JobRoles;
 using SuccessFactor.OrgUnits;
+using SuccessFactor.Security;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -288,9 +289,7 @@ public class PerformanceDashboardAppService : ApplicationService, IPerformanceDa
         }
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
-        var isAllowed = roles.Any(x =>
-            x.Contains("hr", StringComparison.OrdinalIgnoreCase) ||
-            x.Contains("admin", StringComparison.OrdinalIgnoreCase));
+        var isAllowed = SuccessFactorRoles.IsAdminOrHr(roles);
 
         if (!isAllowed)
         {

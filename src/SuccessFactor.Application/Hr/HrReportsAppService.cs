@@ -11,6 +11,7 @@ using SuccessFactor.Employees;
 using SuccessFactor.Goals;
 using SuccessFactor.JobRoles;
 using SuccessFactor.OrgUnits;
+using SuccessFactor.Security;
 using SuccessFactor.Workflow;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -801,9 +802,7 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         }
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
-        var isAllowed = roles.Any(x =>
-            x.Contains("hr", StringComparison.OrdinalIgnoreCase) ||
-            x.Contains("admin", StringComparison.OrdinalIgnoreCase));
+        var isAllowed = SuccessFactorRoles.IsAdminOrHr(roles);
 
         if (!isAllowed)
         {

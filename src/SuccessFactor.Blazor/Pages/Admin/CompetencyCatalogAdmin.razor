@@ -1,4 +1,5 @@
 @page "/admin/competency-catalog"
+@attribute [Authorize(Roles = SuccessFactorRoles.Admin)]
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Components.Forms
 @using SuccessFactor.Admin
