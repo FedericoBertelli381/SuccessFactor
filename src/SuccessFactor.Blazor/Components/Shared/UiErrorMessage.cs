@@ -35,6 +35,8 @@ public static class UiErrorMessage
                 "Employee non presente tra i partecipanti del ciclo.",
             "ParticipantHasNoPhase" or "SuccessFactor:ParticipantHasNoPhase" =>
                 "Il partecipante non ha una fase corrente configurata.",
+            "TargetEmployeeNotInManagerScope" or "SuccessFactor:TargetEmployeeNotInManagerScope" =>
+                "Dipendente non disponibile nel perimetro dell'utente corrente.",
             _ => null
         };
     }

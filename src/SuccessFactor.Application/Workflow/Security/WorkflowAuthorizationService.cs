@@ -133,7 +133,12 @@ public class WorkflowAuthorizationService : ITransientDependency
             (!x.StartDate.HasValue || x.StartDate.Value <= date) &&
             (!x.EndDate.HasValue || x.EndDate.Value >= date));
 
-        return isManagerOfTarget ? "Manager" : "Employee";
+        if (isManagerOfTarget)
+        {
+            return "Manager";
+        }
+
+        throw new BusinessException("TargetEmployeeNotInManagerScope");
     }
 }
 

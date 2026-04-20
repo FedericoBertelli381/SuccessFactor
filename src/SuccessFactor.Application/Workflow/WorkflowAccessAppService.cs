@@ -1,4 +1,5 @@
 using System;
+using Microsoft.AspNetCore.Authorization;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -10,6 +11,7 @@ using SuccessFactor.Security;
 
 namespace SuccessFactor.Workflow;
 
+[Authorize]
 public class WorkflowAccessAppService : ApplicationService
 {
     private readonly IRepository<Cycle, Guid> _cycleRepo;
@@ -123,7 +125,12 @@ public class WorkflowAccessAppService : ApplicationService
             (!x.StartDate.HasValue || x.StartDate.Value <= date) &&
             (!x.EndDate.HasValue || x.EndDate.Value >= date));
 
-        return isManagerOfTarget ? "Manager" : "Employee";
+        if (isManagerOfTarget)
+        {
+            return "Manager";
+        }
+
+        throw new BusinessException("TargetEmployeeNotInManagerScope");
     }
 
     private void EnsureTenantAndUser()

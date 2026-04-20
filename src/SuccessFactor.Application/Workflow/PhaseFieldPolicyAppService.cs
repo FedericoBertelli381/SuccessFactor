@@ -1,4 +1,6 @@
-﻿using System;
+using System;
+using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Security;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -8,6 +10,8 @@ using Volo.Abp.Domain.Repositories;
 using SuccessFactor.Process;
 
 namespace SuccessFactor.Workflow;
+
+[Authorize(Roles = SuccessFactorRoles.Admin)]
 
 public class PhaseFieldPolicyAppService
     : CrudAppService<PhaseFieldPolicy, PhaseFieldPolicyDto, Guid, PagedAndSortedResultRequestDto, CreateUpdatePhaseFieldPolicyDto>

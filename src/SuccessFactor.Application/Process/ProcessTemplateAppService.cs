@@ -1,4 +1,6 @@
-﻿using System;
+using System;
+using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Security;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -7,6 +9,8 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace SuccessFactor.Process;
+
+[Authorize(Roles = SuccessFactorRoles.Admin)]
 
 public class ProcessTemplateAppService :
     CrudAppService<ProcessTemplate, ProcessTemplateDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateProcessTemplateDto>

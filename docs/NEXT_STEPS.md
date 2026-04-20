@@ -73,22 +73,23 @@ Include:
 - STEP 48 completato: Audit log e tracciamento azioni business con pagina Admin filtrabile.
 - STEP 49 completato: Notification/email readiness con configurazione SMTP, template e mail di test.
 - STEP 50 completato: UX polish globale base con componenti riusabili per header, loading, alert ed empty state.
+- STEP 51 completato: security review pre-deploy con hardening endpoint config e target employee scope.
 
 ## Prossimo step consigliato
 
-### STEP 51 - Security review
+### STEP 52 - Performance review
 
 Obiettivo:
-- revisione sicurezza prima del deploy definitivo.
+- verificare query e tempi sulle viste principali.
 
 Include:
-- tenant isolation.
-- role enforcement server-side.
-- query target employee non manipolabili.
-- manager scope via `EmployeeManagers`.
-- admin endpoints protetti.
-- import sanitization.
-- file/export permissions.
+- dashboard My.
+- dashboard Team.
+- dashboard HR.
+- Admin Employees.
+- report HR.
+- indici DB consigliati.
+- paginazione dove necessaria.
 
 ---
 
