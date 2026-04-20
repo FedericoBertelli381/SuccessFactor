@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Auditing;
 using SuccessFactor.Process;
 using SuccessFactor.Security;
 using SuccessFactor.Workflow;
@@ -23,6 +24,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
     private readonly IRepository<ProcessPhase, Guid> _phaseRepository;
     private readonly IRepository<PhaseRolePermission, Guid> _rolePermissionRepository;
     private readonly IRepository<PhaseFieldPolicy, Guid> _fieldPolicyRepository;
+    private readonly IBusinessAuditLogger _auditLogger;
 
     public WorkflowAdminAppService(
         ICurrentUser currentUser,
@@ -30,7 +32,8 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         IRepository<ProcessTemplate, Guid> templateRepository,
         IRepository<ProcessPhase, Guid> phaseRepository,
         IRepository<PhaseRolePermission, Guid> rolePermissionRepository,
-        IRepository<PhaseFieldPolicy, Guid> fieldPolicyRepository)
+        IRepository<PhaseFieldPolicy, Guid> fieldPolicyRepository,
+        IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
@@ -38,6 +41,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         _phaseRepository = phaseRepository;
         _rolePermissionRepository = rolePermissionRepository;
         _fieldPolicyRepository = fieldPolicyRepository;
+        _auditLogger = auditLogger;
     }
 
     public async Task<WorkflowAdminDto> GetAsync(GetWorkflowAdminInput input)
@@ -138,6 +142,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             entity.ConditionExpr = NormalizeNullable(input.ConditionExpr);
 
             entity = await _rolePermissionRepository.UpdateAsync(entity, autoSave: true);
+            await LogRolePermissionSavedAsync(entity, "Update");
             return MapRolePermission(entity);
         }
 
@@ -155,13 +160,21 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             ConditionExpr = NormalizeNullable(input.ConditionExpr)
         }, autoSave: true);
 
+        await LogRolePermissionSavedAsync(created, "Create");
         return MapRolePermission(created);
     }
 
     public async Task DeleteRolePermissionAsync(Guid id)
     {
         EnsureTenantAndAdmin();
+        var entity = await _rolePermissionRepository.GetAsync(id);
         await _rolePermissionRepository.DeleteAsync(id);
+        await _auditLogger.LogAsync("WorkflowRolePermissionDeleted", nameof(PhaseRolePermission), id.ToString(), new Dictionary<string, object?>
+        {
+            ["TemplateId"] = entity.TemplateId,
+            ["PhaseId"] = entity.PhaseId,
+            ["RoleCode"] = entity.RoleCode
+        });
     }
 
     public async Task<PhaseFieldPolicyDto> SaveFieldPolicyAsync(Guid? id, CreateUpdatePhaseFieldPolicyDto input)
@@ -185,6 +198,7 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             entity.ConditionExpr = NormalizeNullable(input.ConditionExpr);
 
             entity = await _fieldPolicyRepository.UpdateAsync(entity, autoSave: true);
+            await LogFieldPolicySavedAsync(entity, "Update");
             return MapFieldPolicy(entity);
         }
 
@@ -201,14 +215,48 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             ConditionExpr = NormalizeNullable(input.ConditionExpr)
         }, autoSave: true);
 
+        await LogFieldPolicySavedAsync(created, "Create");
         return MapFieldPolicy(created);
     }
 
     public async Task DeleteFieldPolicyAsync(Guid id)
     {
         EnsureTenantAndAdmin();
+        var entity = await _fieldPolicyRepository.GetAsync(id);
         await _fieldPolicyRepository.DeleteAsync(id);
+        await _auditLogger.LogAsync("WorkflowFieldPolicyDeleted", nameof(PhaseFieldPolicy), id.ToString(), new Dictionary<string, object?>
+        {
+            ["TemplateId"] = entity.TemplateId,
+            ["PhaseId"] = entity.PhaseId,
+            ["FieldKey"] = entity.FieldKey,
+            ["RoleCode"] = entity.RoleCode
+        });
     }
+
+    private Task LogRolePermissionSavedAsync(PhaseRolePermission entity, string changeType)
+        => _auditLogger.LogAsync("WorkflowRolePermissionSaved", nameof(PhaseRolePermission), entity.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["ChangeType"] = changeType,
+            ["TemplateId"] = entity.TemplateId,
+            ["PhaseId"] = entity.PhaseId,
+            ["RoleCode"] = entity.RoleCode,
+            ["CanView"] = entity.CanView,
+            ["CanEdit"] = entity.CanEdit,
+            ["CanSubmit"] = entity.CanSubmit,
+            ["CanAdvance"] = entity.CanAdvance
+        });
+
+    private Task LogFieldPolicySavedAsync(PhaseFieldPolicy entity, string changeType)
+        => _auditLogger.LogAsync("WorkflowFieldPolicySaved", nameof(PhaseFieldPolicy), entity.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["ChangeType"] = changeType,
+            ["TemplateId"] = entity.TemplateId,
+            ["PhaseId"] = entity.PhaseId,
+            ["FieldKey"] = entity.FieldKey,
+            ["RoleCode"] = entity.RoleCode,
+            ["Access"] = entity.Access,
+            ["IsRequired"] = entity.IsRequired
+        });
 
     private void EnsureTenantAndAdmin()
     {

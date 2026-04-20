@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -6,6 +7,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using SuccessFactor.Auditing;
 using SuccessFactor.Employees;
 using SuccessFactor.Security;
 
@@ -16,11 +18,16 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 {
     private readonly IRepository<Employee, Guid> _employeeRepo;
     private readonly IRepository<IdentityUser, Guid> _userRepo;
+    private readonly IBusinessAuditLogger _auditLogger;
 
-    public EmployeeUserLinkAppService(IRepository<Employee, Guid> employeeRepo, IRepository<IdentityUser, Guid> userRepo)
+    public EmployeeUserLinkAppService(
+        IRepository<Employee, Guid> employeeRepo,
+        IRepository<IdentityUser, Guid> userRepo,
+        IBusinessAuditLogger auditLogger)
     {
         _employeeRepo = employeeRepo;
         _userRepo = userRepo;
+        _auditLogger = auditLogger;
     }
 
     public async Task<IdentityUserLookupDto[]> SearchUsersAsync(string? filter = null, int maxResultCount = 20)
@@ -136,6 +143,11 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
             emp.Email = user.Email;
 
         await _employeeRepo.UpdateAsync(emp, autoSave: true);
+        await _auditLogger.LogAsync("EmployeeUserLinked", nameof(Employee), emp.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["EmployeeId"] = emp.Id,
+            ["LinkedUserId"] = input.UserId
+        });
     }
 
     public async Task UnlinkAsync(Guid employeeId)
@@ -143,8 +155,14 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
         EnsureTenantAndAdmin();
 
         var emp = await _employeeRepo.GetAsync(employeeId);
+        var previousUserId = emp.UserId;
         emp.UserId = null;
         await _employeeRepo.UpdateAsync(emp, autoSave: true);
+        await _auditLogger.LogAsync("EmployeeUserUnlinked", nameof(Employee), emp.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["EmployeeId"] = emp.Id,
+            ["PreviousUserId"] = previousUserId
+        });
     }
 
     // opzionale: link automatico per email (molto comodo)

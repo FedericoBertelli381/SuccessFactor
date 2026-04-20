@@ -1,7 +1,9 @@
-﻿using SuccessFactor.Cycles;
+using SuccessFactor.Auditing;
+using SuccessFactor.Cycles;
 using SuccessFactor.Employees;
 using SuccessFactor.Workflow;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -20,13 +22,15 @@ public class CycleWorkflowAppService : ApplicationService
     private readonly IRepository<ProcessPhase, Guid> _phaseRepo;
     private readonly IRepository<PhaseTransition, Guid> _transitionRepo;
     private readonly WorkflowAuthorizationService _wfAuth;
+    private readonly IBusinessAuditLogger _auditLogger;
     public CycleWorkflowAppService(
         IRepository<Cycle, Guid> cycleRepo,
         IRepository<CycleParticipant, Guid> participantRepo,
         IRepository<Employee, Guid> employeeRepo,
         IRepository<ProcessPhase, Guid> phaseRepo,
         IRepository<PhaseTransition, Guid> transitionRepo,
-        WorkflowAuthorizationService wfAuth)
+        WorkflowAuthorizationService wfAuth,
+        IBusinessAuditLogger auditLogger)
     {
         _cycleRepo = cycleRepo;
         _participantRepo = participantRepo;
@@ -34,6 +38,7 @@ public class CycleWorkflowAppService : ApplicationService
         _phaseRepo = phaseRepo;
         _transitionRepo = transitionRepo;
         _wfAuth = wfAuth;
+        _auditLogger = auditLogger;
     }
 
     public async Task<int> GenerateParticipantsAsync(GenerateParticipantsDto input)
@@ -104,6 +109,13 @@ public class CycleWorkflowAppService : ApplicationService
             var start = await GetStartPhaseAsync(cycle.TemplateId) ?? throw new BusinessException("NoPhasesForTemplate");
             participant.CurrentPhaseId = start.Id;
             await _participantRepo.UpdateAsync(participant, autoSave: true);
+            await _auditLogger.LogAsync("CyclePhaseStarted", nameof(CycleParticipant), participant.Id.ToString(), new Dictionary<string, object?>
+            {
+                ["CycleId"] = input.CycleId,
+                ["EmployeeId"] = input.EmployeeId,
+                ["ToPhaseId"] = start.Id,
+                ["Completed"] = false
+            });
             return;
         }
 
@@ -121,6 +133,14 @@ public class CycleWorkflowAppService : ApplicationService
             participant.Status = "Completed";
 
         await _participantRepo.UpdateAsync(participant, autoSave: true);
+        await _auditLogger.LogAsync("CyclePhaseAdvanced", nameof(CycleParticipant), participant.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["CycleId"] = input.CycleId,
+            ["EmployeeId"] = input.EmployeeId,
+            ["FromPhaseId"] = currentPhase.Id,
+            ["ToPhaseId"] = next.Id,
+            ["Completed"] = next.IsTerminal
+        });
     }
 
     // ---------- helpers ----------

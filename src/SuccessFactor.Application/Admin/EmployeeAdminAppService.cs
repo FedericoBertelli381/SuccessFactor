@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Auditing;
 using SuccessFactor.Employees;
 using SuccessFactor.Security;
 using SuccessFactor.JobRoles;
@@ -23,19 +24,22 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
     private readonly IRepository<Employee, Guid> _employeeRepository;
     private readonly IRepository<OrgUnit, Guid> _orgUnitRepository;
     private readonly IRepository<JobRole, Guid> _jobRoleRepository;
+    private readonly IBusinessAuditLogger _auditLogger;
 
     public EmployeeAdminAppService(
         ICurrentUser currentUser,
         IAsyncQueryableExecuter asyncExecuter,
         IRepository<Employee, Guid> employeeRepository,
         IRepository<OrgUnit, Guid> orgUnitRepository,
-        IRepository<JobRole, Guid> jobRoleRepository)
+        IRepository<JobRole, Guid> jobRoleRepository,
+        IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
         _employeeRepository = employeeRepository;
         _orgUnitRepository = orgUnitRepository;
         _jobRoleRepository = jobRoleRepository;
+        _auditLogger = auditLogger;
     }
 
     public async Task<EmployeeAdminDto> GetAsync()
@@ -240,6 +244,13 @@ public class EmployeeAdminAppService : ApplicationService, IEmployeeAdminAppServ
         }
 
         await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync("EmployeeImportCompleted", "EmployeeImport", null, new Dictionary<string, object?>
+        {
+            ["CreatedCount"] = result.CreatedCount,
+            ["UpdatedCount"] = result.UpdatedCount,
+            ["RowsCount"] = result.Rows.Count,
+            ["UpdateExisting"] = input.UpdateExisting
+        });
         return result;
     }
 

@@ -161,11 +161,31 @@ public class SuccessFactorMenuContributor : IMenuContributor
 
         context.Menu.Items.Add(
             new ApplicationMenuItem(
+                SuccessFactorMenus.AdminAuditLog,
+                "Admin Audit Log",
+                "/admin/audit-log",
+                icon: "fas fa-history",
+                order: 13
+            )
+        );
+
+        context.Menu.Items.Add(
+            new ApplicationMenuItem(
+                SuccessFactorMenus.AdminNotifications,
+                "Admin Notifications",
+                "/admin/notifications",
+                icon: "fas fa-envelope",
+                order: 14
+            )
+        );
+
+        context.Menu.Items.Add(
+            new ApplicationMenuItem(
                 SuccessFactorMenus.AdminWorkflow,
                 "Admin Workflow",
                 "/admin/workflow",
                 icon: "fas fa-sliders-h",
-                order: 13
+                order: 15
             )
         );
 
@@ -175,7 +195,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Employees",
                 "/admin/employees",
                 icon: "fas fa-id-badge",
-                order: 14
+                order: 16
             )
         );
 
@@ -185,7 +205,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin OrgUnits",
                 "/admin/org-units",
                 icon: "fas fa-sitemap",
-                order: 15
+                order: 17
             )
         );
 
@@ -195,7 +215,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Org Chart",
                 "/admin/org-chart",
                 icon: "fas fa-project-diagram",
-                order: 16
+                order: 18
             )
         );
 
@@ -205,7 +225,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin JobRoles",
                 "/admin/job-roles",
                 icon: "fas fa-briefcase",
-                order: 17
+                order: 19
             )
         );
 
@@ -215,7 +235,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Goal Catalog",
                 "/admin/goal-catalog",
                 icon: "fas fa-bullseye",
-                order: 18
+                order: 20
             )
         );
 
@@ -225,7 +245,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Goal Assignments",
                 "/admin/goal-assignments",
                 icon: "fas fa-tasks",
-                order: 19
+                order: 21
             )
         );
 
@@ -235,7 +255,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Competencies",
                 "/admin/competency-catalog",
                 icon: "fas fa-brain",
-                order: 20
+                order: 22
             )
         );
 
@@ -245,7 +265,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Competency Models",
                 "/admin/competency-models",
                 icon: "fas fa-layer-group",
-                order: 21
+                order: 23
             )
         );
 
@@ -255,7 +275,7 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Assessment Setup",
                 "/admin/assessment-setup",
                 icon: "fas fa-clipboard-list",
-                order: 22
+                order: 24
             )
         );
 
@@ -265,13 +285,13 @@ public class SuccessFactorMenuContributor : IMenuContributor
                 "Admin Users",
                 "/admin/identity-link",
                 icon: "fas fa-user-link",
-                order: 23
+                order: 25
             )
         );
 
         //Administration
         var administration = context.Menu.GetAdministration();
-        administration.Order = 24;
+        administration.Order = 26;
     
         if (MultiTenancyConsts.IsEnabled)
         {

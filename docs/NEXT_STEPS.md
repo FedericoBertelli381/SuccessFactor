@@ -70,22 +70,23 @@ Include:
 - STEP 45 completato: Import esteso performance con validazione no-partial-save.
 - STEP 46 completato: SSO Active Directory / Entra ID readiness con OpenID Connect configurabile.
 - STEP 47 completato: Role mapping e authorization hardening.
+- STEP 48 completato: Audit log e tracciamento azioni business con pagina Admin filtrabile.
+- STEP 49 completato: Notification/email readiness con configurazione SMTP, template e mail di test.
 
 ## Prossimo step consigliato
 
-### STEP 48 - Audit log e tracciamento azioni
+### STEP 50 - UX polish globale
 
 Obiettivo:
-- tracciare operazioni rilevanti.
+- rifinire esperienza utente prima del go-live completo.
 
 Include:
-- edit assessment item.
-- submit assessment.
-- advance phase.
-- import dati.
-- modifiche admin workflow.
-- linking utenti.
-- export report.
+- testi coerenti italiano/inglese.
+- loading states.
+- error messages.
+- empty states.
+- layout mobile/desktop.
+- navigazione coerente tra Self, Team, HR, Admin.
 
 ---
 

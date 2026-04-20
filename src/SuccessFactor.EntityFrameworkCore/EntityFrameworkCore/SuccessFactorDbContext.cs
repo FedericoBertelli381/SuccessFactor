@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SuccessFactor.Auditing;
 using SuccessFactor.Competencies;
 using SuccessFactor.Competencies.Assessments;
 using SuccessFactor.Competencies.Models;
@@ -63,6 +64,7 @@ public class SuccessFactorDbContext :
     public DbSet<SuccessFactor.Cycles.CycleParticipant> CycleParticipants { get; set; } = default!;
     public DbSet<SuccessFactor.Workflow.PhaseRolePermission> PhaseRolePermissions { get; set; } = default!;
     public DbSet<SuccessFactor.Workflow.PhaseFieldPolicy> PhaseFieldPolicies { get; set; } = default!;
+    public DbSet<BusinessAuditEvent> BusinessAuditEvents { get; set; } = default!;
 
     #region Entities from the modules
 
@@ -650,6 +652,26 @@ public class SuccessFactorDbContext :
             b.Property(x => x.RowVer).HasColumnName("RowVer").IsRowVersion().IsConcurrencyToken();
 
             b.HasIndex(x => new { x.TemplateId, x.PhaseId, x.FieldKey, x.RoleCode }).IsUnique();
+        });
+        builder.Entity<BusinessAuditEvent>(b =>
+        {
+            b.ToTable("BusinessAuditEvents", "dbo");
+            b.ConfigureByConvention();
+
+            b.Property(x => x.Id).HasColumnName("BusinessAuditEventId").ValueGeneratedOnAdd();
+            b.Property(x => x.TenantId).HasColumnName("TenantId");
+            b.Property(x => x.UserId).HasColumnName("UserId");
+            b.Property(x => x.UserName).HasColumnName("UserName").HasMaxLength(256);
+            b.Property(x => x.Action).HasColumnName("Action").HasMaxLength(100).IsRequired();
+            b.Property(x => x.EntityType).HasColumnName("EntityType").HasMaxLength(200).IsRequired();
+            b.Property(x => x.EntityId).HasColumnName("EntityId").HasMaxLength(100);
+            b.Property(x => x.EventTime).HasColumnName("EventTime").IsRequired();
+            b.Property(x => x.Payload).HasColumnName("Payload");
+
+            b.HasIndex(x => new { x.TenantId, x.EventTime });
+            b.HasIndex(x => new { x.TenantId, x.Action });
+            b.HasIndex(x => new { x.TenantId, x.EntityType });
+            b.HasIndex(x => new { x.TenantId, x.UserName });
         });
     }
 

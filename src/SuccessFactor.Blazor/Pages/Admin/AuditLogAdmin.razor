@@ -1,0 +1,253 @@
+@page "/admin/audit-log"
+@attribute [Authorize(Roles = SuccessFactorRoles.Admin)]
+@using SuccessFactor.Admin
+@inject IBusinessAuditAdminAppService BusinessAuditAdminAppService
+
+<PageTitle>Audit Log Admin</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Audit Log Admin</h2>
+            <div class="text-muted">Consulta eventi business per data, utente, azione, entita e tenant.</div>
+        </div>
+
+        <button class="btn btn-outline-secondary" @onclick="LoadAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Aggiorna
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger mb-4">@_error</div>
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <strong>Filtri</strong>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12 col-md-3 col-xl-2">
+                    <label class="form-label">Da</label>
+                    <input class="form-control" type="date" @bind="_fromDate" />
+                </div>
+                <div class="col-12 col-md-3 col-xl-2">
+                    <label class="form-label">A</label>
+                    <input class="form-control" type="date" @bind="_toDate" />
+                </div>
+                <div class="col-12 col-md-3 col-xl-2">
+                    <label class="form-label">Utente</label>
+                    <input class="form-control" @bind="_user" @bind:event="oninput" placeholder="username o id" />
+                </div>
+                <div class="col-12 col-md-3 col-xl-2">
+                    <label class="form-label">Azione</label>
+                    <input class="form-control" @bind="_action" @bind:event="oninput" placeholder="AssessmentSubmitted" />
+                </div>
+                <div class="col-12 col-md-3 col-xl-2">
+                    <label class="form-label">Entita</label>
+                    <input class="form-control" @bind="_entityType" @bind:event="oninput" placeholder="CompetencyAssessment" />
+                </div>
+                <div class="col-12 col-md-3 col-xl-2">
+                    <label class="form-label">Entity id</label>
+                    <input class="form-control" @bind="_entityId" @bind:event="oninput" placeholder="Guid o parte" />
+                </div>
+                <div class="col-12 col-md-4 col-xl-3">
+                    <label class="form-label">Tenant id</label>
+                    <input class="form-control" @bind="_tenantIdText" @bind:event="oninput" placeholder="Guid tenant" />
+                </div>
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label">Righe</label>
+                    <select class="form-select" @bind="_pageSize">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 col-xl-3 d-flex align-items-end gap-2">
+                    <button class="btn btn-primary" @onclick="SearchAsync" disabled="@_loading">Cerca</button>
+                    <button class="btn btn-outline-secondary" @onclick="ResetAsync" disabled="@_loading">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <strong>Eventi</strong>
+            <span class="badge text-bg-light">@(_data?.TotalCount ?? 0) totali</span>
+        </div>
+        <div class="card-body">
+            @if (_loading && _data is null)
+            {
+                <div class="d-flex align-items-center gap-2 py-4">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Caricamento audit...</span>
+                </div>
+            }
+            else if (_data is null || _data.Items.Count == 0)
+            {
+                <div class="text-muted py-4">Nessun evento trovato con i filtri correnti.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Utente</th>
+                                <th>Tenant</th>
+                                <th>Azione</th>
+                                <th>Entita</th>
+                                <th>Entity id</th>
+                                <th>Payload</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _data.Items)
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@FormatDateTime(item.EventTime)</td>
+                                    <td>
+                                        <div class="fw-semibold">@Display(item.UserName)</div>
+                                        <div class="small text-muted">@Display(item.UserId?.ToString())</div>
+                                    </td>
+                                    <td class="small">@Display(item.TenantId?.ToString())</td>
+                                    <td><span class="badge text-bg-secondary">@item.Action</span></td>
+                                    <td>@item.EntityType</td>
+                                    <td class="small">@Display(item.EntityId)</td>
+                                    <td>
+                                        <details>
+                                            <summary>Dettagli</summary>
+                                            <pre class="small mb-0 mt-2">@item.Payload</pre>
+                                        </details>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                    <div class="text-muted small">
+                        Pagina @(_pageIndex + 1) di @TotalPages
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary" @onclick="PreviousPageAsync" disabled="@(_loading || _pageIndex == 0)">Precedente</button>
+                        <button class="btn btn-outline-secondary" @onclick="NextPageAsync" disabled="@(_loading || _pageIndex >= TotalPages - 1)">Successiva</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private string? _error;
+    private BusinessAuditEventListDto? _data;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private string? _user;
+    private string? _action;
+    private string? _entityType;
+    private string? _entityId;
+    private string? _tenantIdText;
+    private int _pageIndex;
+    private int _pageSize = 50;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)(_data?.TotalCount ?? 0) / _pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-7);
+        _toDate = DateTime.Today;
+        await LoadAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _pageIndex = 0;
+        await LoadAsync();
+    }
+
+    private async Task ResetAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-7);
+        _toDate = DateTime.Today;
+        _user = null;
+        _action = null;
+        _entityType = null;
+        _entityId = null;
+        _tenantIdText = null;
+        _pageIndex = 0;
+        await LoadAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (_pageIndex == 0)
+        {
+            return;
+        }
+
+        _pageIndex--;
+        await LoadAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (_pageIndex >= TotalPages - 1)
+        {
+            return;
+        }
+
+        _pageIndex++;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _data = await BusinessAuditAdminAppService.GetAsync(new GetBusinessAuditEventsInput
+            {
+                From = _fromDate?.Date,
+                To = _toDate?.Date.AddDays(1).AddTicks(-1),
+                User = _user,
+                Action = _action,
+                EntityType = _entityType,
+                EntityId = _entityId,
+                TenantId = ParseGuidOrNull(_tenantIdText),
+                SkipCount = _pageIndex * _pageSize,
+                MaxResultCount = _pageSize
+            });
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Guid? ParseGuidOrNull(string? value)
+        => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string Display(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDateTime(DateTime value)
+        => value.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+}

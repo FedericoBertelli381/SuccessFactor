@@ -1,9 +1,11 @@
-﻿using SuccessFactor.Competencies.Models;
+using SuccessFactor.Auditing;
+using SuccessFactor.Competencies.Models;
 using SuccessFactor.Cycles;
 using SuccessFactor.Employees;
 using SuccessFactor.Workflow;
 using SuccessFactor.Workflow.Security;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -22,6 +24,7 @@ public class CompetencyAssessmentAppService : ApplicationService
     private readonly IRepository<Cycle, Guid> _cycleRepository;
     private readonly IRepository<Employee, Guid> _employeeRepository;
     private readonly WorkflowAuthorizationService _workflowAuthorizationService;
+    private readonly IBusinessAuditLogger _auditLogger;
     public CompetencyAssessmentAppService(
         IRepository<CompetencyAssessment, Guid> assessmentRepository,
         IRepository<CompetencyAssessmentItem, Guid> assessmentItemRepository,
@@ -29,7 +32,8 @@ public class CompetencyAssessmentAppService : ApplicationService
         IRepository<CompetencyModelItem, Guid> modelItemRepository,
         IRepository<Cycle, Guid> cycleRepository,
         IRepository<Employee, Guid> employeeRepository,
-        WorkflowAuthorizationService workflowAuthorizationService)
+        WorkflowAuthorizationService workflowAuthorizationService,
+        IBusinessAuditLogger auditLogger)
     {
         _assessmentRepository = assessmentRepository;
         _assessmentItemRepository = assessmentItemRepository;
@@ -38,6 +42,7 @@ public class CompetencyAssessmentAppService : ApplicationService
         _cycleRepository = cycleRepository;
         _employeeRepository = employeeRepository;
         _workflowAuthorizationService = workflowAuthorizationService;
+        _auditLogger = auditLogger;
     }
 
     public async Task<Guid> CreateFromModelAsync(CreateAssessmentFromModelDto input)
@@ -138,6 +143,17 @@ public class CompetencyAssessmentAppService : ApplicationService
         item.EvidenceAttachmentId = input.EvidenceAttachmentId;
 
         await _assessmentItemRepository.UpdateAsync(item, autoSave: true);
+        await _auditLogger.LogAsync("AssessmentItemUpdated", nameof(CompetencyAssessmentItem), item.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["AssessmentId"] = assessment.Id,
+            ["CycleId"] = assessment.CycleId,
+            ["EmployeeId"] = assessment.EmployeeId,
+            ["EvaluatorEmployeeId"] = assessment.EvaluatorEmployeeId,
+            ["CompetencyId"] = item.CompetencyId,
+            ["HasScore"] = item.Score.HasValue,
+            ["HasComment"] = !string.IsNullOrWhiteSpace(item.Comment),
+            ["HasEvidenceAttachment"] = item.EvidenceAttachmentId.HasValue
+        });
     }
 
     public async Task SubmitAsync(Guid assessmentId)
@@ -180,6 +196,13 @@ public class CompetencyAssessmentAppService : ApplicationService
         assessment.Status = "Submitted";
 
         await _assessmentRepository.UpdateAsync(assessment, autoSave: true);
+        await _auditLogger.LogAsync("AssessmentSubmitted", nameof(CompetencyAssessment), assessment.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["CycleId"] = assessment.CycleId,
+            ["EmployeeId"] = assessment.EmployeeId,
+            ["EvaluatorEmployeeId"] = assessment.EvaluatorEmployeeId,
+            ["AssessmentType"] = assessment.AssessmentType
+        });
     }
     private async Task<bool> HasMissingRequiredScoresAsync(Guid assessmentId, Guid? modelId)
     {

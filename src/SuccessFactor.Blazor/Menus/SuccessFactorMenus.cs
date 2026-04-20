@@ -21,6 +21,8 @@ public class SuccessFactorMenus
     public const string AdminManagerRelations = Prefix + ".AdminManagerRelations";
     public const string AdminPerformanceImport = Prefix + ".AdminPerformanceImport";
     public const string AdminReadiness = Prefix + ".AdminReadiness";
+    public const string AdminAuditLog = Prefix + ".AdminAuditLog";
+    public const string AdminNotifications = Prefix + ".AdminNotifications";
     public const string AdminGoalCatalog = Prefix + ".AdminGoalCatalog";
     public const string AdminGoalAssignments = Prefix + ".AdminGoalAssignments";
     public const string AdminCompetencyCatalog = Prefix + ".AdminCompetencyCatalog";

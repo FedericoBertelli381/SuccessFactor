@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Auditing;
 using SuccessFactor.Competencies;
 using SuccessFactor.Security;
 using SuccessFactor.Competencies.Assessments;
@@ -44,6 +45,7 @@ public class PerformanceSetupImportAppService : ApplicationService, IPerformance
     private readonly IRepository<CompetencyModel, Guid> _competencyModelRepository;
     private readonly IRepository<CompetencyModelItem, Guid> _competencyModelItemRepository;
     private readonly IRepository<CompetencyAssessment, Guid> _assessmentRepository;
+    private readonly IBusinessAuditLogger _auditLogger;
 
     public PerformanceSetupImportAppService(
         ICurrentUser currentUser,
@@ -60,7 +62,8 @@ public class PerformanceSetupImportAppService : ApplicationService, IPerformance
         IRepository<Competency, Guid> competencyRepository,
         IRepository<CompetencyModel, Guid> competencyModelRepository,
         IRepository<CompetencyModelItem, Guid> competencyModelItemRepository,
-        IRepository<CompetencyAssessment, Guid> assessmentRepository)
+        IRepository<CompetencyAssessment, Guid> assessmentRepository,
+        IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
@@ -77,6 +80,7 @@ public class PerformanceSetupImportAppService : ApplicationService, IPerformance
         _competencyModelRepository = competencyModelRepository;
         _competencyModelItemRepository = competencyModelItemRepository;
         _assessmentRepository = assessmentRepository;
+        _auditLogger = auditLogger;
     }
 
     public async Task<PerformanceSetupImportResultDto> ImportAsync(ImportPerformanceSetupInput input)
@@ -181,6 +185,27 @@ public class PerformanceSetupImportAppService : ApplicationService, IPerformance
         }
 
         await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync("PerformanceSetupImportCompleted", "PerformanceSetupImport", null, new Dictionary<string, object?>
+        {
+            ["UpdateExisting"] = input.UpdateExisting,
+            ["CreatedOrgUnits"] = result.CreatedOrgUnits,
+            ["UpdatedOrgUnits"] = result.UpdatedOrgUnits,
+            ["CreatedJobRoles"] = result.CreatedJobRoles,
+            ["UpdatedJobRoles"] = result.UpdatedJobRoles,
+            ["CreatedParticipants"] = result.CreatedParticipants,
+            ["UpdatedParticipants"] = result.UpdatedParticipants,
+            ["CreatedManagerRelations"] = result.CreatedManagerRelations,
+            ["UpdatedManagerRelations"] = result.UpdatedManagerRelations,
+            ["CreatedGoalAssignments"] = result.CreatedGoalAssignments,
+            ["UpdatedGoalAssignments"] = result.UpdatedGoalAssignments,
+            ["CreatedCompetencies"] = result.CreatedCompetencies,
+            ["UpdatedCompetencies"] = result.UpdatedCompetencies,
+            ["CreatedCompetencyModels"] = result.CreatedCompetencyModels,
+            ["UpdatedCompetencyModels"] = result.UpdatedCompetencyModels,
+            ["CreatedCompetencyModelItems"] = result.CreatedCompetencyModelItems,
+            ["UpdatedCompetencyModelItems"] = result.UpdatedCompetencyModelItems,
+            ["RowsCount"] = result.Rows.Count
+        });
         return result;
     }
 

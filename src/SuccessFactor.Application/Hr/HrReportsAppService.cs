@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Auditing;
 using SuccessFactor.Competencies.Assessments;
 using SuccessFactor.Competencies.Models;
 using SuccessFactor.Cycles;
@@ -39,6 +40,7 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
     private readonly IRepository<CompetencyAssessmentItem, Guid> _assessmentItemRepository;
     private readonly IRepository<CompetencyModel, Guid> _modelRepository;
     private readonly IRepository<CompetencyModelItem, Guid> _modelItemRepository;
+    private readonly IBusinessAuditLogger _auditLogger;
 
     public HrReportsAppService(
         ICurrentUser currentUser,
@@ -55,7 +57,8 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         IRepository<CompetencyAssessment, Guid> assessmentRepository,
         IRepository<CompetencyAssessmentItem, Guid> assessmentItemRepository,
         IRepository<CompetencyModel, Guid> modelRepository,
-        IRepository<CompetencyModelItem, Guid> modelItemRepository)
+        IRepository<CompetencyModelItem, Guid> modelItemRepository,
+        IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
@@ -72,6 +75,7 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
         _assessmentItemRepository = assessmentItemRepository;
         _modelRepository = modelRepository;
         _modelItemRepository = modelItemRepository;
+        _auditLogger = auditLogger;
     }
 
     public async Task<HrReportDto> GetAsync(GetHrReportInput input)
@@ -181,10 +185,24 @@ public class HrReportsAppService : ApplicationService, IHrReportsAppService
             HrExportKind.HrReport => BuildHrReportCsv(context),
             _ => throw new BusinessException("HrExportKindNotSupported")
         };
+        var fileName = BuildExportFileName(input.ExportKind, context.SelectedCycle?.Name);
+
+        await _auditLogger.LogAsync("HrReportExported", input.ExportKind.ToString(), context.SelectedCycle?.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["ExportKind"] = input.ExportKind.ToString(),
+            ["CycleId"] = context.SelectedCycle?.Id,
+            ["PhaseId"] = input.PhaseId,
+            ["OrgUnitId"] = input.OrgUnitId,
+            ["JobRoleId"] = input.JobRoleId,
+            ["EmployeesCount"] = context.Employees.Count,
+            ["ParticipantsCount"] = context.Participants.Count,
+            ["AssessmentsCount"] = context.Assessments.Count,
+            ["FileName"] = fileName
+        });
 
         return new HrExportFileDto
         {
-            FileName = BuildExportFileName(input.ExportKind, context.SelectedCycle?.Name),
+            FileName = fileName,
             ContentType = "text/csv; charset=utf-8",
             Content = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray()
         };
