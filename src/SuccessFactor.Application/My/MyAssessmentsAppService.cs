@@ -98,13 +98,6 @@ public class MyAssessmentsAppService : ApplicationService, IMyAssessmentsAppServ
             FieldComment,
             FieldEvidenceAttachmentId);
 
-        var employeeQuery = await _employeeRepository.GetQueryableAsync();
-        var allEmployees = await AsyncExecuter.ToListAsync(employeeQuery);
-
-        var employeeById = allEmployees
-            .GroupBy(x => x.Id)
-            .ToDictionary(g => g.Key, g => g.First());
-
         var assessmentQuery = await _assessmentRepository.GetQueryableAsync();
 
         var assessments = await AsyncExecuter.ToListAsync(
@@ -118,6 +111,22 @@ public class MyAssessmentsAppService : ApplicationService, IMyAssessmentsAppServ
                 .Where(x => !string.Equals(x.Status, "Closed", StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
+
+        var assessmentEmployeeIds = assessments
+            .Select(x => x.EmployeeId)
+            .Concat(assessments.Select(x => x.EvaluatorEmployeeId))
+            .Distinct()
+            .ToList();
+
+        var employees = assessmentEmployeeIds.Count == 0
+            ? new List<Employee>()
+            : await AsyncExecuter.ToListAsync(
+                (await _employeeRepository.GetQueryableAsync())
+                    .Where(x => assessmentEmployeeIds.Contains(x.Id)));
+
+        var employeeById = employees
+            .GroupBy(x => x.Id)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var assessmentIds = assessments.Select(x => x.Id).ToList();
         var modelIds = assessments

@@ -214,6 +214,10 @@ public class SuccessFactorDbContext :
 
             // Indice univoco: TenantId + Matricola
             b.HasIndex(x => new { x.TenantId, x.Matricola }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.UserId });
+            b.HasIndex(x => new { x.TenantId, x.OrgUnitId });
+            b.HasIndex(x => new { x.TenantId, x.JobRoleId });
+            b.HasIndex(x => new { x.TenantId, x.IsActive });
         });
         builder.Entity<EmployeeManager>(b =>
         {
@@ -345,6 +349,7 @@ public class SuccessFactorDbContext :
             b.Property(x => x.RowVer).HasColumnName("RowVer").IsRowVersion().IsConcurrencyToken();
 
             b.HasIndex(x => new { x.TenantId, x.CycleYear });
+            b.HasIndex(x => new { x.TenantId, x.Status, x.CycleYear });
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
         });
         builder.Entity<GoalAssignment>(b =>
@@ -522,6 +527,9 @@ public class SuccessFactorDbContext :
             b.Property(x => x.RowVer).HasColumnName("RowVer").IsRowVersion().IsConcurrencyToken();
 
             b.HasIndex(x => new { x.CycleId, x.EmployeeId });
+            b.HasIndex(x => new { x.TenantId, x.CycleId, x.EmployeeId });
+            b.HasIndex(x => new { x.TenantId, x.CycleId, x.EvaluatorEmployeeId });
+            b.HasIndex(x => new { x.TenantId, x.CycleId, x.Status });
         });
 
         builder.Entity<CompetencyAssessmentItem>(b =>

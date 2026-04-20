@@ -74,22 +74,23 @@ Include:
 - STEP 49 completato: Notification/email readiness con configurazione SMTP, template e mail di test.
 - STEP 50 completato: UX polish globale base con componenti riusabili per header, loading, alert ed empty state.
 - STEP 51 completato: security review pre-deploy con hardening endpoint config e target employee scope.
+- STEP 52 completato: performance review con fix lookup My assessments e script indici DB.
+- STEP 53 completato: backup, restore e disaster recovery con runbook operativo, retention, rollback deploy e script SQL di verifica.
 
 ## Prossimo step consigliato
 
-### STEP 52 - Performance review
+### STEP 54 - Deploy staging
 
 Obiettivo:
-- verificare query e tempi sulle viste principali.
+- provare un deploy completo prima della produzione.
 
 Include:
-- dashboard My.
-- dashboard Team.
-- dashboard HR.
-- Admin Employees.
-- report HR.
-- indici DB consigliati.
-- paginazione dove necessaria.
+- configurazione ambiente staging.
+- connection string.
+- tenant.
+- SSO se disponibile.
+- smoke test completo.
+- correzioni post-test.
 
 ---
 
