@@ -72,21 +72,23 @@ Include:
 - STEP 47 completato: Role mapping e authorization hardening.
 - STEP 48 completato: Audit log e tracciamento azioni business con pagina Admin filtrabile.
 - STEP 49 completato: Notification/email readiness con configurazione SMTP, template e mail di test.
+- STEP 50 completato: UX polish globale base con componenti riusabili per header, loading, alert ed empty state.
 
 ## Prossimo step consigliato
 
-### STEP 50 - UX polish globale
+### STEP 51 - Security review
 
 Obiettivo:
-- rifinire esperienza utente prima del go-live completo.
+- revisione sicurezza prima del deploy definitivo.
 
 Include:
-- testi coerenti italiano/inglese.
-- loading states.
-- error messages.
-- empty states.
-- layout mobile/desktop.
-- navigazione coerente tra Self, Team, HR, Admin.
+- tenant isolation.
+- role enforcement server-side.
+- query target employee non manipolabili.
+- manager scope via `EmployeeManagers`.
+- admin endpoints protetti.
+- import sanitization.
+- file/export permissions.
 
 ---
 
@@ -419,6 +421,7 @@ Include:
 Obiettivo:
 - validazione con utenti reali.
 - ricordare ed eseguire il test SSO Entra ID/ADFS rimandato dallo STEP 46.
+- ricordare ed eseguire il test SMTP end-to-end rimandato dallo STEP 49.
 
 Include:
 - scenario employee.
@@ -426,6 +429,7 @@ Include:
 - scenario HR.
 - scenario admin.
 - test SSO completo con provider aziendale reale.
+- test invio email completo con relay SMTP aziendale reale.
 - raccolta feedback.
 - bugfix prioritari.
 

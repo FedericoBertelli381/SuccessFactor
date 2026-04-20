@@ -1,13 +1,32 @@
 @using Volo.Abp.AspNetCore.Components.Web.LeptonXLiteTheme.Themes.LeptonXLite
 @using Volo.Abp.AspNetCore.Components.Web.Theming.Routing
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Options
 @inject IOptions<AbpRouterOptions> RouterOptions
 <Router AppAssembly="typeof(Program).Assembly" AdditionalAssemblies="RouterOptions.Value.AdditionalAssemblies">
     <Found Context="routeData">
-        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
-            <NotAuthorized>
-                <RedirectToLogin />
-            </NotAuthorized>
-        </AuthorizeRouteView>
+        <ErrorBoundary @ref="_errorBoundary">
+            <ChildContent>
+                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+                    <NotAuthorized>
+                        <RedirectToLogin />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+            </ChildContent>
+            <ErrorContent Context="exception">
+                <div class="container-fluid py-3">
+                    <StatusAlert Message="@UiErrorMessage.From(exception)" Kind="danger" />
+                </div>
+            </ErrorContent>
+        </ErrorBoundary>
     </Found>
 </Router>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+
+    protected override void OnParametersSet()
+    {
+        _errorBoundary?.Recover();
+    }
+}

@@ -6,12 +6,8 @@
 <PageTitle>Audit Log Admin</PageTitle>
 
 <div class="container-fluid py-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-        <div>
-            <h2 class="mb-1">Audit Log Admin</h2>
-            <div class="text-muted">Consulta eventi business per data, utente, azione, entita e tenant.</div>
-        </div>
-
+    <PageHeader Title="Audit Log Admin" Subtitle="Consulta eventi business per data, utente, azione, entita e tenant.">
+        <Actions>
         <button class="btn btn-outline-secondary" @onclick="LoadAsync" disabled="@_loading">
             @if (_loading)
             {
@@ -19,12 +15,10 @@
             }
             Aggiorna
         </button>
-    </div>
+        </Actions>
+    </PageHeader>
 
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="alert alert-danger mb-4">@_error</div>
-    }
+    <StatusAlert Message="@_error" />
 
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
@@ -70,8 +64,8 @@
                     </select>
                 </div>
                 <div class="col-12 col-md-4 col-xl-3 d-flex align-items-end gap-2">
-                    <button class="btn btn-primary" @onclick="SearchAsync" disabled="@_loading">Cerca</button>
-                    <button class="btn btn-outline-secondary" @onclick="ResetAsync" disabled="@_loading">Reset</button>
+                    <button class="btn btn-primary" @onclick="SearchAsync" disabled="@(_loading)">Cerca</button>
+                    <button class="btn btn-outline-secondary" @onclick="ResetAsync" disabled="@(_loading)">Reset</button>
                 </div>
             </div>
         </div>
@@ -85,14 +79,11 @@
         <div class="card-body">
             @if (_loading && _data is null)
             {
-                <div class="d-flex align-items-center gap-2 py-4">
-                    <div class="spinner-border" role="status"></div>
-                    <span>Caricamento audit...</span>
-                </div>
+                <LoadingState Text="Caricamento audit..." />
             }
             else if (_data is null || _data.Items.Count == 0)
             {
-                <div class="text-muted py-4">Nessun evento trovato con i filtri correnti.</div>
+                <EmptyState Title="Nessun evento trovato" Text="Modifica i filtri o genera una nuova azione tracciata." />
             }
             else
             {
@@ -125,7 +116,7 @@
                                     <td>
                                         <details>
                                             <summary>Dettagli</summary>
-                                            <pre class="small mb-0 mt-2">@item.Payload</pre>
+                                            <pre class="small mb-0 mt-2 sf-table-payload">@item.Payload</pre>
                                         </details>
                                     </td>
                                 </tr>
@@ -234,7 +225,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
         finally
         {

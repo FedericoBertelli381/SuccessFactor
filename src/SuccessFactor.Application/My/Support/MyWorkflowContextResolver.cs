@@ -57,7 +57,9 @@ public class MyWorkflowContextResolver : IMyWorkflowContextResolver, ITransientD
 
         if (employee is null)
         {
-            throw new BusinessException("EmployeeNotLinkedToUser");
+            throw new BusinessException(
+                code: "EmployeeNotLinkedToUser",
+                message: "Utente non collegato a Employee. Collega l'utente ABP a un record Employee.");
         }
 
         // 2) Cycle

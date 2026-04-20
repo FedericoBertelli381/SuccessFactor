@@ -48,24 +48,21 @@
 
     @if (!string.IsNullOrWhiteSpace(Error))
     {
-        <div class="alert alert-danger mb-4">
-            @Error
-        </div>
+        <StatusAlert Message="@Error" Kind="danger" />
     }
 
     @if (!string.IsNullOrWhiteSpace(SuccessMessage))
     {
-        <div class="alert alert-success mb-4">
-            @SuccessMessage
-        </div>
+        <StatusAlert Message="@SuccessMessage" Kind="success" />
     }
 
     @if (Loading && AssessmentSummary is null)
     {
-        <div class="d-flex align-items-center gap-2 py-4">
-            <div class="spinner-border" role="status"></div>
-            <span>Caricamento assessment...</span>
-        </div>
+        <LoadingState Text="Caricamento assessment..." />
+    }
+    else if (AssessmentSummary is null && !string.IsNullOrWhiteSpace(Error))
+    {
+        <EmptyState Title="Assessment non disponibile" Text="Correggi il problema indicato nel banner e riprova." />
     }
     else if (AssessmentSummary is not null)
     {

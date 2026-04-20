@@ -4,6 +4,7 @@ using SuccessFactor.Security;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,7 +14,8 @@ using Volo.Abp.Users;
 
 namespace SuccessFactor.My;
 
-public class MyContextAppService : ApplicationService
+[Authorize]
+public class MyContextAppService : ApplicationService, IMyContextAppService
 {
     private readonly IRepository<Employee, Guid> _employeeRepo;
     private readonly IRepository<EmployeeManager, Guid> _employeeManagerRepo;
@@ -34,7 +36,9 @@ public class MyContextAppService : ApplicationService
         var emp = await _employeeRepo.FirstOrDefaultAsync(e => e.UserId == userId);
 
         if (emp == null)
-            throw new BusinessException("EmployeeNotLinkedToUser")
+            throw new BusinessException(
+                    code: "EmployeeNotLinkedToUser",
+                    message: "Utente non collegato a Employee. Collega l'utente ABP a un record Employee.")
                 .WithData("Hint", "Collega Employees.UserId all'utente ABP (AbpUsers.Id).");
 
         var date = asOfDate ?? DateOnly.FromDateTime(Clock.Now);
@@ -58,6 +62,35 @@ public class MyContextAppService : ApplicationService
         };
     }
 
+    public async Task<MyContextStatusDto> GetStatusAsync()
+    {
+        if (CurrentTenant.Id is null)
+        {
+            return CreateErrorStatus("TenantMissing");
+        }
+
+        if (CurrentUser.Id is null)
+        {
+            return CreateErrorStatus("UserNotAuthenticated", CurrentTenant.Id);
+        }
+
+        var userId = CurrentUser.Id.Value;
+        var emp = await _employeeRepo.FirstOrDefaultAsync(e => e.UserId == userId);
+
+        if (emp is null)
+        {
+            return CreateErrorStatus("EmployeeNotLinkedToUser", CurrentTenant.Id, userId);
+        }
+
+        return new MyContextStatusDto
+        {
+            IsReady = true,
+            TenantId = CurrentTenant.Id,
+            UserId = userId,
+            EmployeeId = emp.Id
+        };
+    }
+
     private async Task<string[]> ResolveRoleCodesAsync(Guid actorEmployeeId, string[] abpRoles, DateOnly date)
     {
         bool isHr = SuccessFactorRoles.IsAdminOrHr(abpRoles);
@@ -77,5 +110,27 @@ public class MyContextAppService : ApplicationService
     {
         if (CurrentTenant.Id == null) throw new BusinessException("TenantMissing");
         if (CurrentUser.Id == null) throw new BusinessException("UserNotAuthenticated");
+    }
+
+    private static MyContextStatusDto CreateErrorStatus(
+        string errorCode,
+        Guid? tenantId = null,
+        Guid? userId = null)
+    {
+        return new MyContextStatusDto
+        {
+            IsReady = false,
+            TenantId = tenantId,
+            UserId = userId,
+            ErrorCode = errorCode,
+            ErrorMessage = errorCode switch
+            {
+                "EmployeeNotLinkedToUser" =>
+                    "Utente non collegato a Employee. Collega l'utente ABP a un record Employee prima di accedere all'area My.",
+                "UserNotAuthenticated" => "Utente non autenticato.",
+                "TenantMissing" => "Tenant non valorizzato.",
+                _ => errorCode
+            }
+        };
     }
 }

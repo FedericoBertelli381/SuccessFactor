@@ -509,7 +509,7 @@
 
     private static string GetFriendlyErrorMessage(Exception ex)
     {
-        var message = ex.Message;
+        var message = UiErrorMessage.From(ex);
 
         if (message.Contains("ClosedCycleAssessmentsCannotBeChanged", StringComparison.OrdinalIgnoreCase))
         {

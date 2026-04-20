@@ -25,3 +25,20 @@
     --lpx-logo: url('/images/logo/leptonxlite/logo-dark-thumbnail.png');
     background-position: left;
 }
+
+.sf-page-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.sf-loading-state,
+.sf-empty-state {
+    min-height: 4rem;
+}
+
+.sf-table-payload {
+    max-width: 32rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}

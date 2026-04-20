@@ -26,6 +26,9 @@ public class AssessmentDetailBase : ComponentBase
     [Inject]
     protected IJSRuntime JSRuntime { get; set; } = default!;
 
+    [Inject]
+    protected IMyContextAppService MyContextAppService { get; set; } = default!;
+
     protected bool Loading { get; set; }
     protected bool Submitting { get; set; }
     
@@ -53,9 +56,23 @@ public class AssessmentDetailBase : ComponentBase
         Loading = true;
         Error = null;
         SuccessMessage = null;
+        AssessmentsData = null;
+        AssessmentSummary = null;
+        EditableItems = [];
 
         try
         {
+            var contextStatus = await MyContextAppService.GetStatusAsync();
+
+            if (!contextStatus.IsReady)
+            {
+                Error = contextStatus.ErrorMessage
+                    ?? Components.Shared.UiErrorMessage.FromCode(contextStatus.ErrorCode)
+                    ?? contextStatus.ErrorCode
+                    ?? "Area My non disponibile.";
+                return;
+            }
+
             AssessmentsData = await MyAssessmentsAppService.GetAsync(new GetMyAssessmentsInput());
 
             AssessmentSummary = AssessmentsData.Items.FirstOrDefault(x => x.AssessmentId == AssessmentId);
@@ -82,7 +99,10 @@ public class AssessmentDetailBase : ComponentBase
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = Components.Shared.UiErrorMessage.From(ex);
+            AssessmentsData = null;
+            AssessmentSummary = null;
+            EditableItems = [];
         }
         finally
         {
@@ -119,7 +139,7 @@ public class AssessmentDetailBase : ComponentBase
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = Components.Shared.UiErrorMessage.From(ex);
         }
         finally
         {
@@ -157,7 +177,7 @@ public class AssessmentDetailBase : ComponentBase
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = Components.Shared.UiErrorMessage.From(ex);
         }
         finally
         {

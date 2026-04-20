@@ -1,0 +1,9 @@
+<div class="sf-loading-state d-flex align-items-center gap-2 py-4" role="status" aria-live="polite">
+    <div class="spinner-border"></div>
+    <span>@Text</span>
+</div>
+
+@code {
+    [Parameter]
+    public string Text { get; set; } = "Caricamento...";
+}

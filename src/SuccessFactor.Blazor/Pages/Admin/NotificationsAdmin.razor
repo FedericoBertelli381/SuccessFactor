@@ -6,12 +6,8 @@
 <PageTitle>Notification Admin</PageTitle>
 
 <div class="container-fluid py-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-        <div>
-            <h2 class="mb-1">Notification Admin</h2>
-            <div class="text-muted">Verifica configurazione email, template e invio di test.</div>
-        </div>
-
+    <PageHeader Title="Notification Admin" Subtitle="Verifica configurazione email, template e invio di test.">
+        <Actions>
         <button class="btn btn-outline-secondary" @onclick="LoadAsync" disabled="@_loading">
             @if (_loading)
             {
@@ -19,24 +15,15 @@
             }
             Aggiorna
         </button>
-    </div>
+        </Actions>
+    </PageHeader>
 
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="alert alert-danger mb-4">@_error</div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(_message))
-    {
-        <div class="alert alert-success mb-4">@_message</div>
-    }
+    <StatusAlert Message="@_error" />
+    <StatusAlert Message="@_message" Kind="success" />
 
     @if (_loading && _data is null)
     {
-        <div class="d-flex align-items-center gap-2 py-4">
-            <div class="spinner-border" role="status"></div>
-            <span>Caricamento notifiche...</span>
-        </div>
+        <LoadingState Text="Caricamento notifiche..." />
     }
     else if (_data is not null)
     {
@@ -147,7 +134,7 @@
                                     <td><code>@template.Code</code></td>
                                     <td class="fw-semibold">@template.Name</td>
                                     <td>@template.Subject</td>
-                                    <td><pre class="small mb-0">@template.BodyPreview</pre></td>
+                                    <td><pre class="small mb-0 sf-table-payload">@template.BodyPreview</pre></td>
                                 </tr>
                             }
                         </tbody>
@@ -183,7 +170,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
         finally
         {
@@ -208,7 +195,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
         finally
         {

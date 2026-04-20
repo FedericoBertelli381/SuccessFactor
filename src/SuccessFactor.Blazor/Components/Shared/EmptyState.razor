@@ -1,0 +1,15 @@
+<div class="sf-empty-state text-muted py-4">
+    @if (!string.IsNullOrWhiteSpace(Title))
+    {
+        <div class="fw-semibold text-body mb-1">@Title</div>
+    }
+    <div>@Text</div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string Text { get; set; } = "Nessun dato disponibile.";
+}

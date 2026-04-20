@@ -164,7 +164,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
         finally
         {
@@ -194,7 +194,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
         finally
         {
@@ -216,7 +216,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
     }
 

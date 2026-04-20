@@ -25,6 +25,9 @@ public class GoalDetailBase : ComponentBase
     [Inject]
     protected IGoalProgressAppService GoalProgressAppService { get; set; } = default!;
 
+    [Inject]
+    protected IMyContextAppService MyContextAppService { get; set; } = default!;
+
     protected bool Loading { get; set; }
     protected bool Saving { get; set; }
     protected string? Error { get; set; }
@@ -64,9 +67,25 @@ public class GoalDetailBase : ComponentBase
         Loading = true;
         Error = null;
         SuccessMessage = null;
+        GoalsData = null;
+        GoalItem = null;
+        History = [];
+        LastProgress = null;
+        Summary = null;
 
         try
         {
+            var contextStatus = await MyContextAppService.GetStatusAsync();
+
+            if (!contextStatus.IsReady)
+            {
+                Error = contextStatus.ErrorMessage
+                    ?? Components.Shared.UiErrorMessage.FromCode(contextStatus.ErrorCode)
+                    ?? contextStatus.ErrorCode
+                    ?? "Area My non disponibile.";
+                return;
+            }
+
             GoalsData = await MyGoalsAppService.GetAsync(new GetMyGoalsInput());
 
             GoalItem = GoalsData.Items.FirstOrDefault(x => x.AssignmentId == AssignmentId);
@@ -77,22 +96,21 @@ public class GoalDetailBase : ComponentBase
                 return;
             }
 
-            var historyTask = GoalProgressAppService.GetByAssignmentAsync(AssignmentId);
-            var lastTask = GoalProgressAppService.GetLastProgressAsync(AssignmentId);
-            var summaryTask = GoalProgressAppService.GetProgressSummaryAsync(AssignmentId);
-
-            await Task.WhenAll(historyTask, lastTask, summaryTask);
-
-            History = (await historyTask)
+            History = (await GoalProgressAppService.GetByAssignmentAsync(AssignmentId))
                 .OrderByDescending(x => x.EntryDate)
                 .ToList();
 
-            LastProgress = await lastTask;
-            Summary = await summaryTask;
+            LastProgress = await GoalProgressAppService.GetLastProgressAsync(AssignmentId);
+            Summary = await GoalProgressAppService.GetProgressSummaryAsync(AssignmentId);
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = Components.Shared.UiErrorMessage.From(ex);
+            GoalsData = null;
+            GoalItem = null;
+            History = [];
+            LastProgress = null;
+            Summary = null;
         }
         finally
         {
@@ -135,7 +153,7 @@ public class GoalDetailBase : ComponentBase
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = Components.Shared.UiErrorMessage.From(ex);
         }
         finally
         {

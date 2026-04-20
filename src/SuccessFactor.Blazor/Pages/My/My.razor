@@ -5,6 +5,7 @@
 @inject IMyDashboardAppService MyDashboardAppService
 @inject IMyGoalsAppService MyGoalsAppService
 @inject IMyAssessmentsAppService MyAssessmentsAppService
+@inject IMyContextAppService MyContextAppService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
@@ -55,23 +56,20 @@
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <div class="alert alert-danger mb-4">
-            @_error
-        </div>
+        <StatusAlert Message="@_error" Kind="danger" />
     }
     @if (!string.IsNullOrWhiteSpace(_successMessage))
     {
-        <div class="alert alert-success mb-4">
-            @_successMessage
-        </div>
+        <StatusAlert Message="@_successMessage" Kind="success" />
     }
 
     @if (_loading && _dashboard is null)
     {
-        <div class="d-flex align-items-center gap-2 py-4">
-            <div class="spinner-border" role="status"></div>
-            <span>Caricamento dashboard...</span>
-        </div>
+        <LoadingState Text="Caricamento dashboard..." />
+    }
+    else if (_dashboard is null && !string.IsNullOrWhiteSpace(_error))
+    {
+        <EmptyState Title="Dashboard non disponibile" Text="Correggi il problema indicato nel banner e riprova." />
     }
     else if (_dashboard is not null)
     {
@@ -388,22 +386,33 @@
     {
         _loading = true;
         _error = null;
+        _dashboard = null;
+        _goals = null;
+        _assessments = null;
 
         try
         {
-            var dashboardTask = MyDashboardAppService.GetAsync(new GetMyDashboardInput());
-            var goalsTask = MyGoalsAppService.GetAsync(new GetMyGoalsInput());
-            var assessmentsTask = MyAssessmentsAppService.GetAsync(new GetMyAssessmentsInput());
+            var contextStatus = await MyContextAppService.GetStatusAsync();
 
-            await Task.WhenAll(dashboardTask, goalsTask, assessmentsTask);
+            if (!contextStatus.IsReady)
+            {
+                _error = contextStatus.ErrorMessage
+                    ?? UiErrorMessage.FromCode(contextStatus.ErrorCode)
+                    ?? contextStatus.ErrorCode
+                    ?? "Area My non disponibile.";
+                return;
+            }
 
-            _dashboard = await dashboardTask;
-            _goals = await goalsTask;
-            _assessments = await assessmentsTask;
+            _dashboard = await MyDashboardAppService.GetAsync(new GetMyDashboardInput());
+            _goals = await MyGoalsAppService.GetAsync(new GetMyGoalsInput());
+            _assessments = await MyAssessmentsAppService.GetAsync(new GetMyAssessmentsInput());
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
+            _dashboard = null;
+            _goals = null;
+            _assessments = null;
         }
         finally
         {
@@ -440,7 +449,7 @@
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = UiErrorMessage.From(ex);
         }
         finally
         {
