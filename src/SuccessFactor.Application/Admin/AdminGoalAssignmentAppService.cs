@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Auditing;
 using SuccessFactor.Cycles;
 using SuccessFactor.Security;
 using SuccessFactor.Employees;
@@ -31,6 +33,7 @@ public class AdminGoalAssignmentAppService : ApplicationService, IAdminGoalAssig
     private readonly IRepository<GoalAssignment, Guid> _assignmentRepository;
     private readonly IRepository<ProcessTemplate, Guid> _templateRepository;
     private readonly IRepository<ProcessPhase, Guid> _phaseRepository;
+    private readonly IBusinessAuditLogger _auditLogger;
 
     public AdminGoalAssignmentAppService(
         ICurrentUser currentUser,
@@ -41,7 +44,8 @@ public class AdminGoalAssignmentAppService : ApplicationService, IAdminGoalAssig
         IRepository<Goal, Guid> goalRepository,
         IRepository<GoalAssignment, Guid> assignmentRepository,
         IRepository<ProcessTemplate, Guid> templateRepository,
-        IRepository<ProcessPhase, Guid> phaseRepository)
+        IRepository<ProcessPhase, Guid> phaseRepository,
+        IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
@@ -52,6 +56,7 @@ public class AdminGoalAssignmentAppService : ApplicationService, IAdminGoalAssig
         _assignmentRepository = assignmentRepository;
         _templateRepository = templateRepository;
         _phaseRepository = phaseRepository;
+        _auditLogger = auditLogger;
     }
 
     public async Task<GoalAssignmentAdminDto> GetAsync(Guid? cycleId = null)
@@ -189,6 +194,132 @@ public class AdminGoalAssignmentAppService : ApplicationService, IAdminGoalAssig
             entity,
             new Dictionary<Guid, Employee> { [employee.Id] = employee },
             new Dictionary<Guid, Goal> { [goal.Id] = goal });
+    }
+
+    public async Task<GoalAssignmentImportResultDto> ImportAsync(ImportGoalAssignmentsInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input is null || input.CycleId == Guid.Empty)
+        {
+            throw new BusinessException("CycleIdRequired");
+        }
+
+        if (string.IsNullOrWhiteSpace(input.Content))
+        {
+            throw new BusinessException("GoalAssignmentImportContentRequired");
+        }
+
+        var cycle = await _cycleRepository.GetAsync(input.CycleId);
+        EnsureCycleEditable(cycle);
+
+        var participants = await _participantRepository.GetListAsync(x =>
+            x.CycleId == input.CycleId &&
+            !string.Equals(x.Status, "Excluded", StringComparison.OrdinalIgnoreCase));
+        var participantByEmployeeId = participants.ToDictionary(x => x.EmployeeId);
+
+        var employeeIds = participants.Select(x => x.EmployeeId).ToList();
+        var employees = await _employeeRepository.GetListAsync(x => employeeIds.Contains(x.Id));
+        var employeeByMatricola = employees.ToDictionary(x => x.Matricola, StringComparer.OrdinalIgnoreCase);
+        var employeeById = employees.ToDictionary(x => x.Id);
+
+        var goals = await _goalRepository.GetListAsync();
+        var goalById = goals.ToDictionary(x => x.Id);
+        var goalByTitle = goals
+            .GroupBy(x => x.Title, StringComparer.OrdinalIgnoreCase)
+            .Where(x => x.Count() == 1)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        var existingAssignments = await _assignmentRepository.GetListAsync(x => x.CycleId == input.CycleId);
+        var assignmentByKey = existingAssignments.ToDictionary(x => AssignmentKey(x.EmployeeId, x.GoalId));
+
+        var result = new GoalAssignmentImportResultDto();
+        var rows = ParseImportRows(input.Content);
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validRows = new List<GoalAssignmentImportRow>();
+
+        foreach (var row in rows)
+        {
+            var message = ResolveImportRow(row, employeeByMatricola, participantByEmployeeId, goalById, goalByTitle);
+            if (message is null)
+            {
+                row.AssignmentKey = AssignmentKey(row.EmployeeId!.Value, row.GoalId!.Value);
+
+                if (!seenKeys.Add(row.AssignmentKey))
+                {
+                    message = "Assignment duplicato nel file.";
+                }
+                else if (!input.UpdateExisting && assignmentByKey.ContainsKey(row.AssignmentKey))
+                {
+                    message = "Assignment gia esistente e aggiornamento disabilitato.";
+                }
+            }
+
+            AddImportRowResult(
+                result,
+                row.RowNumber,
+                $"{row.EmployeeMatricola}|{row.GoalLookup}",
+                message is null ? (assignmentByKey.ContainsKey(row.AssignmentKey ?? string.Empty) ? "Update" : "Create") : "Error",
+                message);
+
+            if (message is null)
+            {
+                validRows.Add(row);
+            }
+        }
+
+        if (!result.Rows.Any(x => x.Status == "Error"))
+        {
+            ValidateProjectedWeights(validRows, existingAssignments, result);
+        }
+
+        result.ErrorCount = result.Rows.Count(x => x.Status == "Error");
+        result.HasErrors = result.ErrorCount > 0;
+        if (result.HasErrors)
+        {
+            return result;
+        }
+
+        foreach (var row in validRows)
+        {
+            var isUpdate = assignmentByKey.TryGetValue(row.AssignmentKey!, out var entity);
+            entity ??= new GoalAssignment
+            {
+                TenantId = CurrentTenant.Id,
+                CycleId = input.CycleId,
+                EmployeeId = row.EmployeeId!.Value,
+                GoalId = row.GoalId!.Value
+            };
+
+            entity.Weight = row.Weight!.Value;
+            entity.TargetValue = row.TargetValue;
+            entity.StartDate = row.StartDate;
+            entity.DueDate = row.DueDate;
+            entity.Status = row.Status;
+
+            if (isUpdate)
+            {
+                await _assignmentRepository.UpdateAsync(entity, autoSave: false);
+                result.UpdatedAssignments++;
+            }
+            else
+            {
+                await _assignmentRepository.InsertAsync(entity, autoSave: false);
+                assignmentByKey[row.AssignmentKey!] = entity;
+                result.CreatedAssignments++;
+            }
+        }
+
+        await CurrentUnitOfWork!.SaveChangesAsync();
+        await _auditLogger.LogAsync("GoalAssignmentImportCompleted", nameof(GoalAssignment), cycle.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["CycleName"] = cycle.Name,
+            ["CreatedAssignments"] = result.CreatedAssignments,
+            ["UpdatedAssignments"] = result.UpdatedAssignments,
+            ["RowsCount"] = result.Rows.Count
+        });
+
+        return result;
     }
 
     public async Task DeleteAsync(Guid assignmentId)
@@ -419,5 +550,244 @@ public class AdminGoalAssignmentAppService : ApplicationService, IAdminGoalAssig
             DueDate = assignment.DueDate,
             Status = assignment.Status
         };
+    }
+
+    private static List<GoalAssignmentImportRow> ParseImportRows(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return [];
+        }
+
+        return content
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select((line, index) => new { Line = line.Trim(), RowNumber = index + 1 })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Line))
+            .Select(x => new { x.RowNumber, Columns = SplitImportLine(x.Line) })
+            .Where(x => !IsHeader(x.Columns, "EmployeeMatricola"))
+            .Select(x => new GoalAssignmentImportRow
+            {
+                RowNumber = x.RowNumber,
+                EmployeeMatricola = GetColumn(x.Columns, 0),
+                GoalLookup = GetColumn(x.Columns, 1),
+                WeightText = GetColumn(x.Columns, 2),
+                TargetValueText = GetColumn(x.Columns, 3),
+                StartDateText = GetColumn(x.Columns, 4),
+                DueDateText = GetColumn(x.Columns, 5),
+                Status = GetColumn(x.Columns, 6)
+            })
+            .ToList();
+    }
+
+    private static string? ResolveImportRow(
+        GoalAssignmentImportRow row,
+        Dictionary<string, Employee> employeeByMatricola,
+        Dictionary<Guid, CycleParticipant> participantByEmployeeId,
+        Dictionary<Guid, Goal> goalById,
+        Dictionary<string, Goal> goalByTitle)
+    {
+        row.EmployeeMatricola = NormalizeImportRequired(row.EmployeeMatricola);
+        row.GoalLookup = NormalizeImportRequired(row.GoalLookup);
+        row.Status = string.IsNullOrWhiteSpace(row.Status) ? "Draft" : row.Status.Trim();
+
+        if (!employeeByMatricola.TryGetValue(row.EmployeeMatricola, out var employee))
+        {
+            return "EmployeeMatricola non trovata tra i participant attivi del ciclo.";
+        }
+
+        if (!participantByEmployeeId.ContainsKey(employee.Id))
+        {
+            return "Employee non presente come participant attivo del ciclo.";
+        }
+
+        row.EmployeeId = employee.Id;
+
+        Goal? goal = null;
+        if (Guid.TryParse(row.GoalLookup, out var goalId))
+        {
+            goalById.TryGetValue(goalId, out goal);
+        }
+        else
+        {
+            goalByTitle.TryGetValue(row.GoalLookup, out goal);
+        }
+
+        if (goal is null)
+        {
+            return "Goal non trovato o non univoco.";
+        }
+
+        row.GoalId = goal.Id;
+
+        try
+        {
+            row.Weight = ParseDecimalOrNull(row.WeightText) ?? goal.DefaultWeight;
+            row.TargetValue = ParseDecimalOrNull(row.TargetValueText);
+            row.StartDate = ParseDateOrNull(row.StartDateText);
+            row.DueDate = ParseDateOrNull(row.DueDateText);
+        }
+        catch (BusinessException ex)
+        {
+            return ex.Code switch
+            {
+                "ImportDecimalInvalidFormat" => "Valore numerico non valido.",
+                "ImportDateInvalidFormat" => "Formato data non valido.",
+                _ => ex.Code ?? ex.Message
+            };
+        }
+
+        if (!row.Weight.HasValue)
+        {
+            return "Weight obbligatorio: se la colonna e vuota serve un DefaultWeight sul goal.";
+        }
+
+        if (row.Weight is < 0 or > 100)
+        {
+            return "Weight non valido: usa un valore tra 0 e 100.";
+        }
+
+        if (row.StartDate.HasValue && row.DueDate.HasValue && row.StartDate.Value > row.DueDate.Value)
+        {
+            return "Start date non puo essere successiva alla due date.";
+        }
+
+        if (!AllowedAssignmentStatuses.Contains(row.Status, StringComparer.OrdinalIgnoreCase))
+        {
+            return "Status assignment non valido.";
+        }
+
+        row.Status = AllowedAssignmentStatuses.First(x => string.Equals(x, row.Status, StringComparison.OrdinalIgnoreCase));
+        return null;
+    }
+
+    private static void ValidateProjectedWeights(
+        List<GoalAssignmentImportRow> rows,
+        List<GoalAssignment> existingAssignments,
+        GoalAssignmentImportResultDto result)
+    {
+        var existingByEmployee = existingAssignments
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(x => x.Key, x => x.ToList());
+
+        foreach (var employeeGroup in rows.GroupBy(x => x.EmployeeId!.Value))
+        {
+            var total = existingByEmployee.TryGetValue(employeeGroup.Key, out var current)
+                ? current.Sum(x => x.Weight)
+                : 0m;
+
+            foreach (var row in employeeGroup)
+            {
+                if (current is not null)
+                {
+                    var currentAssignment = current.FirstOrDefault(x => x.GoalId == row.GoalId!.Value);
+                    if (currentAssignment is not null)
+                    {
+                        total -= currentAssignment.Weight;
+                    }
+                }
+
+                total += row.Weight!.Value;
+            }
+
+            if (total > 100m)
+            {
+                foreach (var row in employeeGroup)
+                {
+                    AddImportRowResult(result, row.RowNumber, $"{row.EmployeeMatricola}|{row.GoalLookup}", "Error", "La somma dei pesi goal per questo employee/ciclo supera 100.");
+                }
+            }
+        }
+    }
+
+    private static string NormalizeImportRequired(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new BusinessException("ImportRequiredFieldMissing");
+        }
+
+        return value.Trim();
+    }
+
+    private static string[] SplitImportLine(string line)
+    {
+        var separator = line.Contains(';') ? ';' : ',';
+        return line.Split(separator).Select(x => x.Trim()).ToArray();
+    }
+
+    private static bool IsHeader(string[] columns, string firstColumnName)
+        => columns.Length > 0 && string.Equals(columns[0], firstColumnName, StringComparison.OrdinalIgnoreCase);
+
+    private static string GetColumn(string[] columns, int index)
+        => columns.Length > index ? columns[index].Trim() : string.Empty;
+
+    private static decimal? ParseDecimalOrNull(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Trim() == "-")
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) ||
+            decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out parsed))
+        {
+            return parsed;
+        }
+
+        throw new BusinessException("ImportDecimalInvalidFormat");
+    }
+
+    private static DateOnly? ParseDateOrNull(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Trim() == "-")
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        var formats = new[] { "yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy" };
+        if (DateOnly.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ||
+            DateOnly.TryParse(normalized, CultureInfo.CurrentCulture, DateTimeStyles.None, out parsed))
+        {
+            return parsed;
+        }
+
+        throw new BusinessException("ImportDateInvalidFormat");
+    }
+
+    private static string AssignmentKey(Guid employeeId, Guid goalId)
+        => $"{employeeId:N}|{goalId:N}";
+
+    private static void AddImportRowResult(GoalAssignmentImportResultDto result, int rowNumber, string key, string status, string? message = null)
+    {
+        result.Rows.Add(new GoalAssignmentImportRowResultDto
+        {
+            RowNumber = rowNumber,
+            Key = key,
+            Status = status,
+            Message = message
+        });
+    }
+
+    private class GoalAssignmentImportRow
+    {
+        public int RowNumber { get; set; }
+        public string EmployeeMatricola { get; set; } = string.Empty;
+        public string GoalLookup { get; set; } = string.Empty;
+        public string? WeightText { get; set; }
+        public string? TargetValueText { get; set; }
+        public string? StartDateText { get; set; }
+        public string? DueDateText { get; set; }
+        public string Status { get; set; } = "Draft";
+        public Guid? EmployeeId { get; set; }
+        public Guid? GoalId { get; set; }
+        public decimal? Weight { get; set; }
+        public decimal? TargetValue { get; set; }
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? DueDate { get; set; }
+        public string? AssignmentKey { get; set; }
     }
 }

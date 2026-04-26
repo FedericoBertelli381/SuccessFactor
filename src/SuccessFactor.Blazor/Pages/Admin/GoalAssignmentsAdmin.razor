@@ -169,6 +169,88 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Import massivo goal assignments</strong>
+                <span class="badge text-bg-light">no partial save</span>
+            </div>
+            <div class="card-body">
+                @if (!_data.SelectedCycleId.HasValue)
+                {
+                    <div class="text-muted">Seleziona prima un ciclo.</div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        Formato: <code>EmployeeMatricola;Goal;Weight;TargetValue;StartDate;DueDate;Status</code>.
+                        <br />
+                        <span>Goal puo essere titolo univoco o Guid. Se Weight e vuoto, viene usato il DefaultWeight del goal.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="6"
+                              @bind="_importContent"
+                              placeholder="EMP001;Incremento fatturato;40;100000;2026-01-01;2026-12-31;Approved"
+                              disabled="@(!CanEditSelectedCycle())"></textarea>
+
+                    <div class="form-check mt-3">
+                        <input type="checkbox" class="form-check-input" @bind="_importUpdateExisting" disabled="@(!CanEditSelectedCycle())" />
+                        <label class="form-check-label">Aggiorna assignment esistenti se trovati</label>
+                    </div>
+
+                    <button class="btn btn-primary mt-3"
+                            @onclick="ImportAsync"
+                            disabled="@(_importing || !CanEditSelectedCycle() || string.IsNullOrWhiteSpace(_importContent))">
+                        @if (_importing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Importa assignments
+                    </button>
+
+                    @if (_importResult is not null)
+                    {
+                        <div class="mt-4">
+                            <div class="@(_importResult.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                                @if (_importResult.HasErrors)
+                                {
+                                    <span>Import bloccato: correggi gli errori e riprova. Nessun assignment e stato salvato.</span>
+                                }
+                                else
+                                {
+                                    <span>Import completato. Assignments @_importResult.CreatedAssignments/@_importResult.UpdatedAssignments.</span>
+                                }
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Riga</th>
+                                            <th>Chiave</th>
+                                            <th>Status</th>
+                                            <th>Messaggio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _importResult.Rows)
+                                        {
+                                            <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                                <td>@row.RowNumber</td>
+                                                <td>@row.Key</td>
+                                                <td>@row.Status</td>
+                                                <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-white">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
@@ -265,14 +347,18 @@
 
     private bool _loading;
     private bool _saving;
+    private bool _importing;
     private string? _error;
     private string? _successMessage;
     private Guid? _selectedCycleId;
     private GoalAssignmentAdminDto? _data;
+    private GoalAssignmentImportResultDto? _importResult;
     private GoalAssignmentFormModel _form = new();
     private string? _search;
     private string? _statusFilter;
     private string? _participantFilter;
+    private string? _importContent;
+    private bool _importUpdateExisting = true;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -381,6 +467,43 @@
         catch (Exception ex)
         {
             _error = GetFriendlyErrorMessage(ex);
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_data?.SelectedCycleId is null)
+        {
+            return;
+        }
+
+        _importing = true;
+        _error = null;
+        _successMessage = null;
+        _importResult = null;
+
+        try
+        {
+            _importResult = await AdminGoalAssignmentAppService.ImportAsync(new ImportGoalAssignmentsInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                Content = _importContent,
+                UpdateExisting = _importUpdateExisting
+            });
+
+            if (!_importResult.HasErrors)
+            {
+                _successMessage = "Import goal assignments completato correttamente.";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _importing = false;
         }
     }
 

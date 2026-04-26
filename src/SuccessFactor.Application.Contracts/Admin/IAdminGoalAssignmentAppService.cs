@@ -7,6 +7,7 @@ namespace SuccessFactor.Admin;
 public interface IAdminGoalAssignmentAppService : IApplicationService
 {
     Task<GoalAssignmentAdminDto> GetAsync(Guid? cycleId = null);
+    Task<GoalAssignmentImportResultDto> ImportAsync(ImportGoalAssignmentsInput input);
     Task<GoalAssignmentAdminListItemDto> SaveAsync(Guid? assignmentId, SaveGoalAssignmentAdminInput input);
     Task DeleteAsync(Guid assignmentId);
 }
