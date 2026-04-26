@@ -8,8 +8,8 @@
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
-            <h2 class="mb-1">Performance Import Admin</h2>
-            <div class="text-muted">Import setup ciclo con validazione completa e no partial save.</div>
+            <h2 class="mb-1">Master Import HR</h2>
+            <div class="text-muted">Import unico per onboarding tenant, assetto organizzativo, accessi applicativi e setup performance con validazione completa e no partial save.</div>
         </div>
     </div>
 
@@ -58,6 +58,67 @@
                               rows="8"
                               @bind="_jobRolesContent"
                               placeholder="Name"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import Employees</strong>
+                    <span class="badge text-bg-light">Employees</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Matricola;FullName;Email;OrgUnit;JobRole;IsActive</code>.
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="8"
+                              @bind="_employeesContent"
+                              placeholder="Matricola;FullName;Email;OrgUnit;JobRole;IsActive"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import Identity Links</strong>
+                    <span class="badge text-bg-light">EmployeeUsers</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>Matricola;UserName;Email;MatchMode</code>.
+                        <br />
+                        <span>MatchMode: Auto, UserName, Email.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="8"
+                              @bind="_identityLinksContent"
+                              placeholder="Matricola;UserName;Email;MatchMode"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <strong>Import User Roles</strong>
+                    <span class="badge text-bg-light">IdentityRoles</span>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Formato: <code>UserName;Email;Matricola;Roles;Mode</code>.
+                        <br />
+                        <span>Roles separati con <code>|</code>. Mode: Add, Replace.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="8"
+                              @bind="_userRolesContent"
+                              placeholder="UserName;Email;Matricola;Roles;Mode"></textarea>
                 </div>
             </div>
         </div>
@@ -201,6 +262,9 @@
                                 Import completato.
                                 OrgUnits @_result.CreatedOrgUnits/@_result.UpdatedOrgUnits,
                                 JobRoles @_result.CreatedJobRoles/@_result.UpdatedJobRoles,
+                                Employees @_result.CreatedEmployees/@_result.UpdatedEmployees,
+                                Identity links @_result.LinkedEmployees/@_result.RelinkedEmployees,
+                                User roles @_result.ProcessedUserRoles/@_result.AddedUserRoleAssignments/@_result.RemovedUserRoleAssignments,
                                 Participants @_result.CreatedParticipants/@_result.UpdatedParticipants,
                                 Manager relations @_result.CreatedManagerRelations/@_result.UpdatedManagerRelations,
                                 Goal assignments @_result.CreatedGoalAssignments/@_result.UpdatedGoalAssignments,
@@ -247,6 +311,9 @@
     private bool _updateExisting = true;
     private string? _orgUnitsContent;
     private string? _jobRolesContent;
+    private string? _employeesContent;
+    private string? _identityLinksContent;
+    private string? _userRolesContent;
     private string? _participantsContent;
     private string? _managerRelationsContent;
     private string? _goalAssignmentsContent;
@@ -269,6 +336,9 @@
             {
                 OrgUnitsContent = _orgUnitsContent,
                 JobRolesContent = _jobRolesContent,
+                EmployeesContent = _employeesContent,
+                IdentityLinksContent = _identityLinksContent,
+                UserRolesContent = _userRolesContent,
                 ParticipantsContent = _participantsContent,
                 ManagerRelationsContent = _managerRelationsContent,
                 GoalAssignmentsContent = _goalAssignmentsContent,
@@ -295,6 +365,9 @@
     private bool BothContentsAreEmpty()
         => string.IsNullOrWhiteSpace(_orgUnitsContent) &&
            string.IsNullOrWhiteSpace(_jobRolesContent) &&
+           string.IsNullOrWhiteSpace(_employeesContent) &&
+           string.IsNullOrWhiteSpace(_identityLinksContent) &&
+           string.IsNullOrWhiteSpace(_userRolesContent) &&
            string.IsNullOrWhiteSpace(_participantsContent) &&
            string.IsNullOrWhiteSpace(_managerRelationsContent) &&
            string.IsNullOrWhiteSpace(_goalAssignmentsContent) &&

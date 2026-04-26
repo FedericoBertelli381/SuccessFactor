@@ -10,6 +10,13 @@ public class PerformanceSetupImportResultDto
     public int UpdatedOrgUnits { get; set; }
     public int CreatedJobRoles { get; set; }
     public int UpdatedJobRoles { get; set; }
+    public int CreatedEmployees { get; set; }
+    public int UpdatedEmployees { get; set; }
+    public int LinkedEmployees { get; set; }
+    public int RelinkedEmployees { get; set; }
+    public int ProcessedUserRoles { get; set; }
+    public int AddedUserRoleAssignments { get; set; }
+    public int RemovedUserRoleAssignments { get; set; }
     public int CreatedParticipants { get; set; }
     public int UpdatedParticipants { get; set; }
     public int CreatedManagerRelations { get; set; }

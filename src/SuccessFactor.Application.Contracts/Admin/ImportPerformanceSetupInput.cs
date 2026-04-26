@@ -4,6 +4,9 @@ public class ImportPerformanceSetupInput
 {
     public string? OrgUnitsContent { get; set; }
     public string? JobRolesContent { get; set; }
+    public string? EmployeesContent { get; set; }
+    public string? IdentityLinksContent { get; set; }
+    public string? UserRolesContent { get; set; }
     public string? ParticipantsContent { get; set; }
     public string? ManagerRelationsContent { get; set; }
     public string? GoalAssignmentsContent { get; set; }
