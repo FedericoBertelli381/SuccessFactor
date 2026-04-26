@@ -1,0 +1,20 @@
+@import '_content/Volo.Abp.PermissionManagement.Blazor/Volo.Abp.PermissionManagement.Blazor.p33ll9g8os.bundle.scp.css';
+
+/* /Components/Pages/Index.razor.rz.scp.css */
+/* Getting-Started */
+.card-bg-image[b-bgrjkwhagb] {
+    pointer-events: none;
+    position: absolute;
+    width: 630px;
+    height: auto;
+    bottom: 0;
+    right: 0;
+    z-index: 1;
+}
+.starting-content[b-bgrjkwhagb] {
+    position: relative;
+    z-index: 2;
+}
+/* Getting-Started End */
+
+/* Write here your styles for the Index page */

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Manuale Utente SuccessFactor</title>
+  <style>
+    @page { size: A4; margin: 2cm; }
+    body {
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      color: #1f2937;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3 {
+      color: #123b68;
+      margin-top: 18pt;
+      margin-bottom: 8pt;
+    }
+    h1 {
+      font-size: 24pt;
+      text-align: center;
+      margin-top: 30pt;
+      page-break-before: auto;
+    }
+    h2 {
+      font-size: 16pt;
+      border-bottom: 1px solid #cfd8e3;
+      padding-bottom: 4pt;
+    }
+    h3 {
+      font-size: 13pt;
+    }
+    p {
+      margin: 0 0 8pt 0;
+      text-align: justify;
+    }
+    ul, ol {
+      margin-top: 4pt;
+      margin-bottom: 8pt;
+    }
+    li {
+      margin-bottom: 4pt;
+    }
+    .cover {
+      text-align: center;
+      padding-top: 80pt;
+      page-break-after: always;
+    }
+    .subtitle {
+      font-size: 14pt;
+      color: #475569;
+      margin-top: 12pt;
+    }
+    .meta {
+      margin-top: 36pt;
+      font-size: 11pt;
+      color: #475569;
+    }
+    .toc {
+      background: #f8fafc;
+      border: 1px solid #dbe4ef;
+      padding: 12pt 14pt;
+      margin: 16pt 0 22pt 0;
+    }
+    .box {
+      background: #f8fafc;
+      border-left: 4px solid #3b82f6;
+      padding: 10pt 12pt;
+      margin: 12pt 0;
+    }
+    .warning {
+      background: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 10pt 12pt;
+      margin: 12pt 0;
+    }
+    .success {
+      background: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      padding: 10pt 12pt;
+      margin: 12pt 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10pt 0 14pt 0;
+    }
+    th, td {
+      border: 1px solid #cfd8e3;
+      padding: 7pt;
+      vertical-align: top;
+    }
+    th {
+      background: #eaf1f8;
+      text-align: left;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    .small {
+      font-size: 10pt;
+      color: #475569;
+    }
+    .code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 10pt;
+      background: #f3f4f6;
+      padding: 1pt 4pt;
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <h1>Manuale Utente SuccessFactor</h1>
+    <div class="subtitle">Guida operativa e divulgativa per dipendenti, responsabili, HR e amministratori</div>
+    <div class="meta">
+      Versione documento: 2.0<br />
+      Data: 23 aprile 2026<br />
+      Ambito: utilizzo funzionale, amministrativo e operativo della piattaforma
+    </div>
+  </div>
+
+  <h2>Indice</h2>
+  <div class="toc">
+    <p>1. Scopo del manuale</p>
+    <p>2. Visione generale della piattaforma</p>
+    <p>3. Concetti fondamentali spiegati in modo semplice</p>
+    <p>4. Ruoli applicativi e responsabilita</p>
+    <p>5. Percorso utente: cosa fa il Dipendente</p>
+    <p>6. Percorso utente: cosa fa il Responsabile</p>
+    <p>7. Percorso utente: cosa fa HR</p>
+    <p>8. Area Admin: anagrafiche, sicurezza e manutenzione</p>
+    <p>9. Nuova gestione completa dei Workflow Template da interfaccia Admin</p>
+    <p>10. Cicli di performance, goals e valutazioni</p>
+    <p>11. Import, export e dati di partenza</p>
+    <p>12. Notifiche, SSO e accesso</p>
+    <p>13. Audit, controlli e troubleshooting</p>
+    <p>14. Checklist operative</p>
+    <p>15. Glossario rapido</p>
+  </div>
+
+  <h2>1. Scopo del manuale</h2>
+  <p>Questo documento serve a spiegare la piattaforma SuccessFactor in un linguaggio chiaro, operativo e non tecnico. L'obiettivo non e' solo descrivere le schermate, ma aiutare chi la usa a capire il significato dei concetti che stanno dietro al processo di performance management.</p>
+  <p>In altre parole, questo manuale vuole rispondere a due esigenze diverse ma complementari:</p>
+  <ul>
+    <li><b>divulgativa</b>: far comprendere il senso di termini come template, fase, cycle, goal, assessment, manager relation, audit;</li>
+    <li><b>operativa</b>: spiegare come lavorare ogni giorno sulla piattaforma, come impostare i dati e come evitare errori tipici.</li>
+  </ul>
+  <div class="box">
+    <b>Importante:</b> questo non e' un manuale di sviluppo software. E' un manuale per utenti business, utenti amministrativi e referenti di progetto che devono usare la piattaforma in modo corretto.
+  </div>
+
+  <h2>2. Visione generale della piattaforma</h2>
+  <p>SuccessFactor e' una piattaforma per gestire il ciclo di performance aziendale. Permette di collegare persone, ruoli, obiettivi, competenze e fasi di approvazione dentro un processo ordinato, tracciabile e controllato.</p>
+  <p>La piattaforma consente di:</p>
+  <ul>
+    <li>censire dipendenti, utenti applicativi, unita organizzative e ruoli professionali;</li>
+    <li>definire relazioni gerarchiche tra manager e collaboratori;</li>
+    <li>creare cicli di performance annuali o periodici;</li>
+    <li>assegnare goals e monitorarne l'avanzamento;</li>
+    <li>gestire valutazioni e autovalutazioni basate su competenze;</li>
+    <li>stabilire cosa puo essere visto o modificato in ogni fase del processo;</li>
+    <li>tenere traccia degli eventi rilevanti tramite audit log.</li>
+  </ul>
+  <p>Il cuore del sistema non e' la singola schermata, ma il <b>workflow</b>: cioe' il disegno delle fasi, delle transizioni e dei permessi che stabiliscono chi puo fare cosa e in quale momento.</p>
+
+  <h2>3. Concetti fondamentali spiegati in modo semplice</h2>
+
+  <h3>3.1 Tenant</h3>
+  <p>Un tenant rappresenta un perimetro organizzativo separato. In pratica e' il contenitore logico dei dati di una certa azienda, divisione o ambiente. In un'applicazione multi-tenant, due tenant diversi non devono interferire tra loro.</p>
+  <p>Quando si lavora in piattaforma, il tenant corrente viene spesso passato nell'URL con il parametro <span class="code">__tenant</span>. Questo serve a garantire che le operazioni avvengano sempre nel contesto corretto.</p>
+  <div class="success">
+    Esempio pratico: se si apre la pagina <span class="code">/my?__tenant=Default</span>, il sistema capisce che l'utente sta lavorando nel tenant chiamato <b>Default</b>.
+  </div>
+
+  <h3>3.2 Utente applicativo</h3>
+  <p>L'utente applicativo e' l'account con cui una persona accede al sistema. E' quindi il profilo di login, non ancora il dipendente in senso HR. Un utente puo essere locale oppure, in un secondo momento, provenire da integrazione SSO.</p>
+  <p>Questo significa che una persona puo esistere come account di accesso, ma non essere ancora completamente operativa nel processo di performance se manca il collegamento con l'anagrafica del dipendente.</p>
+
+  <h3>3.3 Employee</h3>
+  <p>L'Employee e' il dipendente censito nel dominio applicativo. Contiene informazioni come matricola, nominativo, email, stato attivo, ruolo, unita organizzativa e collegamento all'utente di login.</p>
+  <p>La distinzione tra utente ed employee e' fondamentale: l'utente serve per entrare, l'employee serve per partecipare al processo.</p>
+  <div class="warning">
+    Se un utente accede ma non e' collegato a un Employee, alcune funzioni come <span class="code">/my</span> non possono funzionare correttamente. In quel caso il sistema mostra un errore business esplicito, ad esempio <span class="code">EmployeeNotLinkedToUser</span>.
+  </div>
+
+  <h3>3.4 Identity Link</h3>
+  <p>L'identity link e' il ponte tra account applicativo ed employee. E' il meccanismo che permette al sistema di capire a quale dipendente corrisponde il login corrente.</p>
+  <p>Senza identity link, il sistema non puo sapere chi e' davvero la persona che sta operando nella piattaforma. Questo impatta pagine personali, gerarchie manageriali, autorizzazioni di workflow e report.</p>
+
+  <h3>3.5 OrgUnit</h3>
+  <p>Le OrgUnit rappresentano la struttura organizzativa: direzioni, aree, uffici, reparti o team. Sono molto utili per ordinare i dati, generare report leggibili e riflettere l'organigramma aziendale.</p>
+  <p>Nel sistema attuale le OrgUnit hanno soprattutto una funzione organizzativa e informativa. La visibilita manageriale non dipende automaticamente da loro, ma dalle relazioni manageriali effettive.</p>
+
+  <h3>3.6 JobRole</h3>
+  <p>Il JobRole e' la mansione o il ruolo professionale. Consente di raggruppare i dipendenti per tipologia di lavoro e di leggere i dati secondo una prospettiva professionale, non solo gerarchica.</p>
+
+  <h3>3.7 Manager Relation</h3>
+  <p>La manager relation e' la relazione che dice chi e' responsabile di chi. E' il dato che abilita davvero il perimetro operativo del manager.</p>
+  <p>Se una relazione manageriale e' attiva, il responsabile puo vedere e operare sui propri collaboratori in pagine come <span class="code">/team</span>. Se la relazione non c'e', o non e' valida per data, quel perimetro non esiste.</p>
+
+  <h3>3.8 Workflow Template</h3>
+  <p>Il workflow template e' il modello del processo. E' la definizione astratta di come un ciclo deve muoversi nel tempo. Un template non rappresenta ancora persone reali: rappresenta la logica del processo.</p>
+  <p>Dentro un template si definiscono:</p>
+  <ul>
+    <li>le <b>fasi</b> del processo;</li>
+    <li>le <b>transizioni</b> possibili tra una fase e l'altra;</li>
+    <li>i <b>permessi per ruolo</b> in ogni fase;</li>
+    <li>le <b>field policy</b>, cioe' le regole di visibilita e modifica dei singoli campi.</li>
+  </ul>
+
+  <h3>3.9 Fase</h3>
+  <p>La fase e' uno stato del processo. Esempi classici sono <b>SELF</b>, <b>MGR</b> e <b>HR</b>. Ogni participant del ciclo si trova sempre in una fase precisa, e da quella fase dipende cosa puo fare.</p>
+
+  <h3>3.10 Transizione</h3>
+  <p>La transizione e' il passaggio autorizzato da una fase a un'altra. Se una transizione non e' definita nel template, quel passaggio non fa parte del processo.</p>
+
+  <h3>3.11 Role Permission</h3>
+  <p>Le role permission rispondono alla domanda: in questa fase, il ruolo Employee o Manager o HR puo vedere o modificare il participant?</p>
+  <p>Queste regole lavorano a livello generale di fase.</p>
+
+  <h3>3.12 Field Policy</h3>
+  <p>Le field policy scendono a un livello piu fine. Servono a dire se uno specifico campo e' nascosto, leggibile o modificabile.</p>
+  <p>Esempio: e' possibile avere una fase SELF in cui il dipendente compila l'autovalutazione ma non puo aggiornare l'avanzamento dei goal. In questo caso la fase resta editabile, ma i campi <span class="code">Goals.ProgressPercent</span>, <span class="code">Goals.ActualValue</span> e simili vengono messi in sola lettura o nascosti per il ruolo Employee.</p>
+
+  <h3>3.13 Cycle</h3>
+  <p>Il cycle e' il ciclo di performance reale, per esempio "Performance 2026". A differenza del template, il cycle non e' una regola astratta: e' un'istanza vera del processo, con persone, obiettivi, scadenze e stato operativo.</p>
+
+  <h3>3.14 Cycle Participant</h3>
+  <p>Il participant e' il dipendente coinvolto in un certo ciclo. E' l'unita base del processo: ogni participant ha un dipendente, una fase corrente, obiettivi, valutazioni e cronologia del proprio avanzamento.</p>
+
+  <h3>3.15 Goal</h3>
+  <p>Il goal e' un obiettivo assegnato a un participant. Puo avere titolo, descrizione, peso, valore atteso, avanzamento, note e allegati. La compilazione del goal dipende dal workflow attivo.</p>
+
+  <h3>3.16 Assessment e Competency</h3>
+  <p>L'assessment e' la valutazione. Le competency sono gli elementi oggetto di valutazione: comportamenti, competenze, capacita o criteri professionali. In base alla fase, la compilazione puo essere affidata al dipendente, al manager o ad altri ruoli.</p>
+
+  <h3>3.17 Audit</h3>
+  <p>L'audit e' il tracciamento degli eventi importanti. Serve a sapere chi ha fatto cosa, quando, su quale entita e in quale tenant. E' una funzione essenziale per controllo, verifica e supporto.</p>
+
+  <h2>4. Ruoli applicativi e responsabilita</h2>
+  <table>
+    <tr>
+      <th>Ruolo</th>
+      <th>Finalita principale</th>
+      <th>Esempi di attivita</th>
+    </tr>
+    <tr>
+      <td>Dipendente</td>
+      <td>Gestire il proprio percorso individuale</td>
+      <td>Aprire la propria scheda, consultare goals, compilare parti previste dal workflow</td>
+    </tr>
+    <tr>
+      <td>Responsabile / Manager</td>
+      <td>Seguire i propri collaboratori</td>
+      <td>Entrare in /team, aggiornare goals se consentito, compilare valutazioni manageriali</td>
+    </tr>
+    <tr>
+      <td>HR</td>
+      <td>Governare dati, cicli e letture trasversali</td>
+      <td>Import dati, controllo readiness, report, monitoraggio processi</td>
+    </tr>
+    <tr>
+      <td>Admin</td>
+      <td>Configurare piattaforma e sicurezza</td>
+      <td>Gestire anagrafiche tecniche, permessi, identity link, workflow template, audit</td>
+    </tr>
+  </table>
+
+  <h2>5. Percorso utente: cosa fa il Dipendente</h2>
+  <p>Il punto di riferimento del dipendente e' la pagina <span class="code">/my</span>. Qui l'utente vede la propria posizione nel ciclo, gli eventuali goals e le sezioni di valutazione che lo riguardano.</p>
+  <h3>5.1 Prima di tutto: il dipendente deve essere correttamente collegato</h3>
+  <p>Per usare la sezione personale, l'utente loggato deve essere associato a un Employee. Se manca il collegamento, il sistema non deve bloccarsi: deve mostrare un banner rosso con l'errore business effettivo.</p>
+  <h3>5.2 Cosa puo fare in pratica</h3>
+  <ul>
+    <li>vedere i propri dati di partecipazione al ciclo;</li>
+    <li>consultare i goal assegnati;</li>
+    <li>compilare le sezioni permesse dalla fase corrente;</li>
+    <li>leggere messaggi di errore business o di validazione senza interrompere l'applicazione.</li>
+  </ul>
+  <div class="box">
+    Il fatto che un dipendente veda un goal non implica automaticamente che possa aggiornarne l'avanzamento. Questo dipende dalle field policy della fase corrente.
+  </div>
+
+  <h2>6. Percorso utente: cosa fa il Responsabile</h2>
+  <p>Il responsabile lavora soprattutto nella pagina <span class="code">/team</span>. Da qui seleziona i collaboratori che rientrano nel proprio perimetro manageriale e opera sui loro dati nel rispetto del workflow.</p>
+  <h3>6.1 Quando un manager vede davvero un collaboratore</h3>
+  <p>Il manager vede un employee solo se esiste una relazione valida in <span class="code">EmployeeManagers</span>. Non basta essere nella stessa struttura o nello stesso tenant.</p>
+  <h3>6.2 Esempio richiesto da un'azienda: goals aggiornati solo dal manager</h3>
+  <p>Una richiesta molto comune e' questa: il dipendente non deve aggiornare il progresso dei goals in fase SELF, mentre il manager deve poterlo fare in fase MGR.</p>
+  <p>La piattaforma supporta questo scenario: si lascia la fase SELF eventualmente editabile per altre parti della scheda, ma si imposta per il ruolo Employee la sola lettura o il nascondimento dei campi goal. In fase MGR, invece, gli stessi campi vengono impostati come modificabili per il ruolo Manager.</p>
+
+  <h2>7. Percorso utente: cosa fa HR</h2>
+  <p>HR governa il processo in modo trasversale. Non lavora solo sul singolo participant, ma sul disegno complessivo del ciclo, sulla qualita del dato e sulla coerenza operativa dell'ambiente.</p>
+  <p>Le attivita tipiche di HR sono:</p>
+  <ul>
+    <li>importare o verificare dati di dipendenti, organigrammi e relazioni manageriali;</li>
+    <li>creare e attivare cicli di performance;</li>
+    <li>monitorare dashboard e report;</li>
+    <li>verificare la readiness del sistema prima di partire;</li>
+    <li>supportare responsabili e utenti nella lettura del processo.</li>
+  </ul>
+
+  <h2>8. Area Admin: anagrafiche, sicurezza e manutenzione</h2>
+  <p>L'area Admin e' il centro di configurazione del sistema. Alcune voci di menu devono essere visibili solo agli utenti autorizzati. Per chi non ha i permessi, la voce non deve comparire affatto nel menu.</p>
+  <p>Tra le aree di maggiore rilievo ci sono:</p>
+  <ul>
+    <li><b>Identity Link</b>: collega login ed employee;</li>
+    <li><b>Workflow</b>: configura template, fasi, transizioni, permission e field policy;</li>
+    <li><b>Audit</b>: consulta gli eventi operativi filtrando per data, utente, azione, entita e tenant;</li>
+    <li><b>Readiness</b>: controlla se il tenant e i dati sono pronti per l'uso;</li>
+    <li><b>Notifications</b>: gestisce configurazioni e test della parte email.</li>
+  </ul>
+
+  <h2 class="page-break">9. Nuova gestione completa dei Workflow Template da interfaccia Admin</h2>
+  <p>Questa e' la novita piu importante introdotta nella piattaforma: l'Admin puo creare un workflow template da zero senza dover usare SQL o Swagger. La pagina di riferimento e' <span class="code">/admin/workflow?__tenant=&lt;tenant&gt;</span>.</p>
+  <div class="success">
+    Con la nuova interfaccia l'utente Admin puo: creare template, aggiungere fasi, definire transizioni, impostare role permissions e field policies, il tutto dalla stessa area applicativa.
+  </div>
+
+  <h3>9.1 Prima di iniziare: come ragionare sul processo</h3>
+  <p>Prima ancora di aprire la pagina, conviene chiarire in azienda il disegno del processo. Le domande utili sono:</p>
+  <ul>
+    <li>quali fasi servono davvero;</li>
+    <li>in che ordine devono susseguirsi;</li>
+    <li>chi compila cosa in ogni fase;</li>
+    <li>quali campi devono essere visibili, leggibili o editabili;</li>
+    <li>quando il processo si considera concluso.</li>
+  </ul>
+
+  <h3>9.2 Passo 1: creare il Template</h3>
+  <p>Nella sezione template si inseriscono almeno:</p>
+  <ul>
+    <li><b>Name</b>: il nome del modello, ad esempio "Performance Annuale";</li>
+    <li><b>Version</b>: utile per distinguere revisioni successive dello stesso disegno;</li>
+    <li><b>Is Default</b>: da usare solo se quel template deve essere il riferimento predefinito.</li>
+  </ul>
+  <p>Una volta salvato, il template entra nell'elenco selezionabile e diventa il contenitore su cui costruire tutto il resto.</p>
+
+  <h3>9.3 Passo 2: aggiungere le Fasi</h3>
+  <p>Ogni template ha una o piu fasi. Ogni fase dovrebbe avere almeno:</p>
+  <ul>
+    <li><b>Code</b>: codice breve e stabile, ad esempio SELF, MGR, HR;</li>
+    <li><b>Display Name</b>: nome leggibile per l'utente;</li>
+    <li><b>Order</b>: ordine logico nel processo;</li>
+    <li><b>Flags operativi</b> se previsti dalla pagina.</li>
+  </ul>
+  <p>Le fasi non sono semplici etichette: sono il punto in cui si agganciano permessi, policy e transizioni.</p>
+
+  <h3>9.4 Passo 3: definire le Transizioni</h3>
+  <p>Dopo aver creato le fasi, si definisce come il processo puo muoversi. Una transizione collega una fase di partenza a una fase di arrivo.</p>
+  <p>Esempio classico:</p>
+  <ul>
+    <li>SELF -&gt; MGR</li>
+    <li>MGR -&gt; HR</li>
+  </ul>
+  <p>Questo significa che il participant puo passare da SELF a MGR e poi da MGR a HR. Se manca una transizione, quel passaggio non fa parte del modello.</p>
+
+  <h3>9.5 Passo 4: configurare le Role Permissions</h3>
+  <p>Selezionata una fase, l'Admin puo stabilire per ogni ruolo se il participant e' visibile e se e' modificabile. Qui si definisce il potere generale del ruolo su quella fase.</p>
+  <p>Per esempio, in fase MGR il ruolo Manager puo avere <b>CanView = true</b> e <b>CanEdit = true</b>, mentre Employee puo avere solo visualizzazione.</p>
+
+  <h3>9.6 Passo 5: configurare le Field Policies</h3>
+  <p>Le field policy servono per affinare la regola. E' qui che si costruisce davvero il comportamento fine della scheda.</p>
+  <p>Esempio concreto molto richiesto:</p>
+  <ul>
+    <li>in SELF il dipendente puo compilare la parte self assessment;</li>
+    <li>in SELF il dipendente non puo aggiornare l'avanzamento dei goals;</li>
+    <li>in MGR il manager puo aggiornare i campi di avanzamento goals.</li>
+  </ul>
+  <p>In questo scenario, per la fase SELF si impostano i campi goal come <b>Read</b> o <b>Hidden</b> per il ruolo Employee. Per la fase MGR gli stessi campi vengono impostati come <b>Edit</b> per il ruolo Manager.</p>
+
+  <h3>9.7 Passo 6: usare il Template nei cicli</h3>
+  <p>Una volta completato, il template diventa disponibile nella gestione cicli. Quando si crea o aggiorna un cycle, si seleziona il template desiderato e i participant erediteranno quella logica di processo.</p>
+
+  <h3>9.8 Regole di sicurezza e protezione gia incluse</h3>
+  <p>La piattaforma evita alcune cancellazioni pericolose. In particolare:</p>
+  <ul>
+    <li>un template usato da cicli non dovrebbe essere eliminato liberamente;</li>
+    <li>una fase gia usata o referenziata non va rimossa senza controllo;</li>
+    <li>le transizioni duplicate non devono essere create.</li>
+  </ul>
+  <p>Questo protegge la stabilita del processo e riduce gli errori amministrativi.</p>
+
+  <h3>9.9 Procedura consigliata per creare un template nuovo</h3>
+  <ol>
+    <li>aprire la pagina workflow come Admin;</li>
+    <li>creare il template con nome e versione;</li>
+    <li>creare tutte le fasi necessarie;</li>
+    <li>ordinare logicamente le fasi;</li>
+    <li>creare le transizioni consentite;</li>
+    <li>selezionare ogni fase e configurare role permissions;</li>
+    <li>sempre su ogni fase, configurare le field policy;</li>
+    <li>creare un ciclo di prova che usa quel template;</li>
+    <li>testare con un employee e un manager reali di test;</li>
+    <li>solo dopo la validazione, usare il template nei cicli ufficiali.</li>
+  </ol>
+
+  <h2>10. Cicli di performance, goals e valutazioni</h2>
+  <h3>10.1 Draft, Active, Closed</h3>
+  <p>Un ciclo in <b>Draft</b> e' ancora in preparazione. In <b>Active</b> e' operativo. In <b>Closed</b> e' concluso e non dovrebbe piu essere oggetto di normali modifiche operative.</p>
+  <h3>10.2 Goals</h3>
+  <p>I goals rappresentano gli obiettivi della persona nel ciclo. Possono essere qualitativi o quantitativi. La cosa importante non e' solo il contenuto del goal, ma il momento del processo in cui puo essere aggiornato e da chi.</p>
+  <h3>10.3 Valutazioni</h3>
+  <p>Le valutazioni basate su competenze seguono la stessa logica del workflow: non basta esistere in pagina, devono essere editabili nel ruolo e nella fase giusti.</p>
+
+  <h2>11. Import, export e dati di partenza</h2>
+  <p>Una piattaforma di performance non vive senza dati affidabili. Prima di aspettarsi un funzionamento corretto, occorre verificare che siano presenti e coerenti:</p>
+  <ul>
+    <li>tenant;</li>
+    <li>utenti;</li>
+    <li>employee;</li>
+    <li>identity link;</li>
+    <li>org unit;</li>
+    <li>job role;</li>
+    <li>manager relation;</li>
+    <li>cicli e participant.</li>
+  </ul>
+  <p>Gli import devono essere eseguiti con attenzione perche' relazioni e chiavi logiche si appoggiano l'una sull'altra. In caso di dubbio, e' sempre meglio fare una prova su tenant o ambiente di test.</p>
+
+  <h2>12. Notifiche, SSO e accesso</h2>
+  <h3>12.1 Notifiche email</h3>
+  <p>Le notifiche dipendono dalla configurazione SMTP. In ambiente di test e' possibile che l'invio non sia verificabile fino in fondo per limiti di relay, whitelist o policy infrastrutturali. Questo non significa necessariamente che la piattaforma sia errata: puo dipendere dal server di posta.</p>
+  <h3>12.2 SSO</h3>
+  <p>La piattaforma puo essere preparata per SSO, ma la validazione completa richiede il coinvolgimento dell'infrastruttura identita. Per questo motivo i test SSO spesso vanno pianificati in una fase piu avanzata del progetto.</p>
+  <div class="warning">
+    Se il test SSO non e' ancora stato completato, e' opportuno ricordarlo prima della chiusura del progetto o del go-live.
+  </div>
+
+  <h2>13. Audit, controlli e troubleshooting</h2>
+  <h3>13.1 Audit</h3>
+  <p>La pagina audit consente di filtrare eventi per data, utente, azione, entita e tenant. E' utile sia per verificare un processo, sia per ricostruire cosa e' successo in presenza di anomalie.</p>
+  <h3>13.2 Errori business contro errori tecnici</h3>
+  <p>Non tutti gli errori hanno lo stesso significato. Un errore business, come <span class="code">EmployeeNotLinkedToUser</span>, e' un messaggio di dominio e va mostrato all'utente in modo comprensibile. Un errore tecnico, invece, puo indicare un problema di configurazione, connessione, permessi o codice.</p>
+  <h3>13.3 Alcuni controlli rapidi quando qualcosa non torna</h3>
+  <ul>
+    <li>verificare il tenant in URL;</li>
+    <li>verificare che l'utente sia collegato a un employee;</li>
+    <li>verificare che il manager abbia una relazione valida;</li>
+    <li>verificare che il participant sia nella fase attesa;</li>
+    <li>verificare role permissions e field policies;</li>
+    <li>verificare che il template selezionato dal ciclo sia quello corretto.</li>
+  </ul>
+
+  <h2>14. Checklist operative</h2>
+  <h3>14.1 Checklist minima prima dell'avvio di un tenant</h3>
+  <ul>
+    <li>tenant corretto e raggiungibile;</li>
+    <li>utenti creati;</li>
+    <li>employee presenti e attivi;</li>
+    <li>identity link completati;</li>
+    <li>org unit e job role valorizzati dove necessario;</li>
+    <li>manager relation caricate;</li>
+    <li>workflow template verificato;</li>
+    <li>cycle creato e participant presenti;</li>
+    <li>audit disponibile;</li>
+    <li>pagina readiness senza blocchi sostanziali.</li>
+  </ul>
+
+  <h3>14.2 Checklist per un nuovo Workflow Template</h3>
+  <ul>
+    <li>nome template chiaro e versione valorizzata;</li>
+    <li>fasi definite e ordinate;</li>
+    <li>transizioni complete;</li>
+    <li>role permissions coerenti per ogni fase;</li>
+    <li>field policy testate sui campi sensibili;</li>
+    <li>prova end-to-end con employee e manager;</li>
+    <li>template associato a un ciclo di prova prima dell'uso reale.</li>
+  </ul>
+
+  <h3>14.3 Checklist per il supporto utente</h3>
+  <ul>
+    <li>chiedere sempre quale tenant e quale utente sono coinvolti;</li>
+    <li>capire se il problema e' di visibilita, modifica, dati mancanti o fase errata;</li>
+    <li>verificare audit e stato participant;</li>
+    <li>distinguere un errore business da un problema tecnico di ambiente.</li>
+  </ul>
+
+  <h2>15. Glossario rapido</h2>
+  <table>
+    <tr>
+      <th>Termine</th>
+      <th>Significato semplice</th>
+    </tr>
+    <tr>
+      <td>Tenant</td>
+      <td>Perimetro logico di dati separati</td>
+    </tr>
+    <tr>
+      <td>User</td>
+      <td>Account di accesso</td>
+    </tr>
+    <tr>
+      <td>Employee</td>
+      <td>Dipendente nel dominio applicativo</td>
+    </tr>
+    <tr>
+      <td>Identity Link</td>
+      <td>Collegamento tra login e dipendente</td>
+    </tr>
+    <tr>
+      <td>Cycle</td>
+      <td>Ciclo di performance reale</td>
+    </tr>
+    <tr>
+      <td>Participant</td>
+      <td>Dipendente inserito in un ciclo</td>
+    </tr>
+    <tr>
+      <td>Workflow Template</td>
+      <td>Modello del processo</td>
+    </tr>
+    <tr>
+      <td>Phase</td>
+      <td>Stato del processo</td>
+    </tr>
+    <tr>
+      <td>Transition</td>
+      <td>Passaggio consentito tra fasi</td>
+    </tr>
+    <tr>
+      <td>Role Permission</td>
+      <td>Potere generale di un ruolo in una fase</td>
+    </tr>
+    <tr>
+      <td>Field Policy</td>
+      <td>Regola puntuale su un singolo campo</td>
+    </tr>
+    <tr>
+      <td>Goal</td>
+      <td>Obiettivo assegnato a una persona</td>
+    </tr>
+    <tr>
+      <td>Assessment</td>
+      <td>Valutazione di competenze o performance</td>
+    </tr>
+    <tr>
+      <td>Audit</td>
+      <td>Storico degli eventi operativi</td>
+    </tr>
+  </table>
+
+  <p class="small">Fine del documento.</p>
+</body>
+</html>

@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Manuale Amministratore SuccessFactor</title>
+  <style>
+    @page { size: A4; margin: 2cm; }
+    body {
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      color: #1f2937;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2, h3, h4 {
+      color: #123b68;
+      margin-top: 18pt;
+      margin-bottom: 8pt;
+    }
+    h1 { font-size: 24pt; text-align: center; margin-top: 24pt; }
+    h2 { font-size: 16pt; border-bottom: 1px solid #d5dde8; padding-bottom: 4pt; }
+    h3 { font-size: 13pt; }
+    h4 { font-size: 11.5pt; }
+    p {
+      margin: 0 0 8pt 0;
+      text-align: justify;
+    }
+    ul, ol {
+      margin-top: 4pt;
+      margin-bottom: 8pt;
+    }
+    li { margin-bottom: 4pt; }
+    .cover {
+      text-align: center;
+      padding-top: 72pt;
+      page-break-after: always;
+    }
+    .subtitle {
+      font-size: 14pt;
+      color: #475569;
+      margin-top: 12pt;
+    }
+    .meta {
+      margin-top: 36pt;
+      color: #475569;
+    }
+    .toc, .box, .warning, .success {
+      padding: 10pt 12pt;
+      margin: 12pt 0;
+    }
+    .toc {
+      background: #f8fafc;
+      border: 1px solid #dbe4ef;
+    }
+    .box {
+      background: #f8fafc;
+      border-left: 4px solid #3b82f6;
+    }
+    .warning {
+      background: #fff7ed;
+      border-left: 4px solid #f97316;
+    }
+    .success {
+      background: #f0fdf4;
+      border-left: 4px solid #22c55e;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10pt 0 14pt 0;
+    }
+    th, td {
+      border: 1px solid #d3dce8;
+      padding: 7pt;
+      vertical-align: top;
+    }
+    th {
+      background: #eaf1f8;
+      text-align: left;
+    }
+    .code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #f3f4f6;
+      padding: 1pt 4pt;
+      font-size: 10pt;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    .small {
+      font-size: 10pt;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <h1>Manuale Operativo Amministratore</h1>
+    <div class="subtitle">SuccessFactor - guida dettagliata, esaustiva e passo-passo per l'utente Admin</div>
+    <div class="meta">
+      Versione documento: 1.0<br />
+      Data: 26 aprile 2026<br />
+      Destinatari: amministratori funzionali, referenti HR di sistema, key user di configurazione
+    </div>
+  </div>
+
+  <h2>Indice</h2>
+  <div class="toc">
+    <p>1. Scopo del manuale</p>
+    <p>2. Profilo dell'amministratore: responsabilita e approccio corretto</p>
+    <p>3. Regole generali di lavoro in piattaforma</p>
+    <p>4. Mappa completa delle aree Admin</p>
+    <p>5. Anagrafiche di base: Org Units, Job Roles, Employees</p>
+    <p>6. Struttura gerarchica: Manager Relations e Org Chart</p>
+    <p>7. Sicurezza funzionale: Identity Link</p>
+    <p>8. Workflow Admin: creare template, fasi, transizioni, permessi e field policy</p>
+    <p>9. Goals: catalogo e assegnazioni</p>
+    <p>10. Competenze e valutazioni: cataloghi, modelli, setup assessment</p>
+    <p>11. Cicli e partecipanti</p>
+    <p>12. Import massivo</p>
+    <p>13. Notifications Admin</p>
+    <p>14. Production Readiness</p>
+    <p>15. Audit Log Admin</p>
+    <p>16. Procedure operative tipiche</p>
+    <p>17. Errori frequenti e come affrontarli</p>
+    <p>18. Checklist finali</p>
+  </div>
+
+  <h2>1. Scopo del manuale</h2>
+  <p>Questo manuale e' pensato per l'utente amministratore del sistema SuccessFactor. Non e' una semplice lista di schermate: e' una guida di lavoro che spiega in profondita' le finalita' di ogni funzione, il corretto ordine operativo e il motivo per cui ogni azione amministrativa ha un impatto sul comportamento della piattaforma.</p>
+  <p>L'obiettivo e' permettere all'Admin di:</p>
+  <ul>
+    <li>capire il senso delle configurazioni, non solo i pulsanti;</li>
+    <li>impostare un tenant da zero o correggere un tenant esistente;</li>
+    <li>evitare errori di sequenza che poi bloccano dipendenti, manager o HR;</li>
+    <li>sapere cosa controllare quando un utente segnala un'anomalia;</li>
+    <li>lavorare in modo ripetibile, documentabile e sicuro.</li>
+  </ul>
+
+  <h2>2. Profilo dell'amministratore: responsabilita e approccio corretto</h2>
+  <p>L'amministratore non e' solo chi "fa manutenzione". In SuccessFactor l'Admin governa la coerenza del processo. Le sue scelte incidono direttamente su cio' che dipendenti e responsabili potranno vedere o modificare.</p>
+  <p>Le sue responsabilita principali sono:</p>
+  <ul>
+    <li>assicurare che i dati base del tenant siano completi e coerenti;</li>
+    <li>garantire il corretto collegamento tra utenze e dipendenti;</li>
+    <li>definire e mantenere il workflow del processo;</li>
+    <li>configurare cataloghi, modelli, cicli e partecipanti;</li>
+    <li>supportare troubleshooting e audit.</li>
+  </ul>
+  <div class="warning">
+    Regola d'oro: prima di cambiare una configurazione in un tenant gia' usato, bisogna chiedersi se quella modifica tocca solo il futuro o puo' alterare anche processi gia' avviati.
+  </div>
+
+  <h2>3. Regole generali di lavoro in piattaforma</h2>
+  <h3>3.1 Lavorare sempre nel tenant corretto</h3>
+  <p>Molte pagine amministrative dipendono dal tenant corrente. Il tenant viene normalmente passato nel parametro URL <span class="code">__tenant</span>. Se si lavora nel tenant sbagliato, si rischia di non trovare dati oppure, peggio, di configurare un perimetro diverso da quello desiderato.</p>
+
+  <h3>3.2 Rispettare l'ordine corretto delle configurazioni</h3>
+  <p>In SuccessFactor non tutte le entita sono indipendenti. Una parte della piattaforma si appoggia all'altra. Un ordine consigliato e' il seguente:</p>
+  <ol>
+    <li>Org Units e Job Roles</li>
+    <li>Employees</li>
+    <li>Manager Relations</li>
+    <li>Identity Link</li>
+    <li>Cataloghi e modelli</li>
+    <li>Workflow Template</li>
+    <li>Cycles</li>
+    <li>Cycle Participants</li>
+    <li>Goal Assignments / Assessment Setup</li>
+  </ol>
+  <p>Seguire questa sequenza riduce moltissimo gli errori.</p>
+
+  <h3>3.3 Capire la differenza tra dato anagrafico, dato di processo e dato di sicurezza</h3>
+  <table>
+    <tr>
+      <th>Tipo dato</th>
+      <th>Esempi</th>
+      <th>Perche' conta</th>
+    </tr>
+    <tr>
+      <td>Anagrafico</td>
+      <td>Employee, OrgUnit, JobRole</td>
+      <td>Descrive chi sono le persone e dove stanno</td>
+    </tr>
+    <tr>
+      <td>Di processo</td>
+      <td>Workflow template, Cycle, Participant, Goal</td>
+      <td>Descrive cosa devono fare e in quale fase</td>
+    </tr>
+    <tr>
+      <td>Di sicurezza / accesso</td>
+      <td>User, Identity Link, ruolo Admin</td>
+      <td>Determina chi puo accedere e operare</td>
+    </tr>
+  </table>
+
+  <h2>4. Mappa completa delle aree Admin</h2>
+  <table>
+    <tr>
+      <th>Pagina</th>
+      <th>URL</th>
+      <th>Finalita principale</th>
+    </tr>
+    <tr><td>Employees Admin</td><td><span class="code">/admin/employees</span></td><td>Creazione e manutenzione dipendenti</td></tr>
+    <tr><td>OrgUnits Admin</td><td><span class="code">/admin/org-units</span></td><td>Struttura organizzativa</td></tr>
+    <tr><td>JobRoles Admin</td><td><span class="code">/admin/job-roles</span></td><td>Mansioni / ruoli professionali</td></tr>
+    <tr><td>Manager Relations Admin</td><td><span class="code">/admin/manager-relations</span></td><td>Gerarchie manageriali operative</td></tr>
+    <tr><td>Org Chart Admin</td><td><span class="code">/admin/org-chart</span></td><td>Vista sintetica della struttura</td></tr>
+    <tr><td>Identity Link Admin</td><td><span class="code">/admin/identity-link</span></td><td>Collegamento utenti-dipendenti</td></tr>
+    <tr><td>Workflow Admin</td><td><span class="code">/admin/workflow</span></td><td>Template, fasi, transizioni, permessi e policy</td></tr>
+    <tr><td>Goal Catalog Admin</td><td><span class="code">/admin/goal-catalog</span></td><td>Catalogo goal del tenant</td></tr>
+    <tr><td>Goal Assignments Admin</td><td><span class="code">/admin/goal-assignments</span></td><td>Assegnazione goal ai participant</td></tr>
+    <tr><td>Competency Catalog Admin</td><td><span class="code">/admin/competency-catalog</span></td><td>Catalogo competenze</td></tr>
+    <tr><td>Competency Models Admin</td><td><span class="code">/admin/competency-models</span></td><td>Modelli competenze con pesi e scala</td></tr>
+    <tr><td>Assessment Setup Admin</td><td><span class="code">/admin/assessment-setup</span></td><td>Generazione assessment</td></tr>
+    <tr><td>Cycles Admin</td><td><span class="code">/admin/cycles</span></td><td>Creazione e gestione cicli</td></tr>
+    <tr><td>Cycle Participants Admin</td><td><span class="code">/admin/cycle-participants</span></td><td>Partecipanti del ciclo e reset fase</td></tr>
+    <tr><td>Performance Import Admin</td><td><span class="code">/admin/performance-import</span></td><td>Import massivo setup</td></tr>
+    <tr><td>Notifications Admin</td><td><span class="code">/admin/notifications</span></td><td>Configurazione e test email</td></tr>
+    <tr><td>Production Readiness</td><td><span class="code">/admin/readiness</span></td><td>Controllo pre-avvio o pre-go-live</td></tr>
+    <tr><td>Audit Log Admin</td><td><span class="code">/admin/audit-log</span></td><td>Consultazione eventi business</td></tr>
+  </table>
+
+  <h2>5. Anagrafiche di base: Org Units, Job Roles, Employees</h2>
+
+  <h3>5.1 OrgUnits Admin</h3>
+  <p><b>Finalita:</b> costruire la struttura organizzativa del tenant. Le Org Unit aiutano a leggere il dato e a dare contesto alle persone.</p>
+  <p><b>Quando usarla:</b> all'inizio del progetto, quando cambia l'organizzazione, o quando serve allineare organigramma e sistema.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire <span class="code">/admin/org-units?__tenant=&lt;tenant&gt;</span>.</li>
+    <li>Verificare l'elenco esistente per evitare duplicati.</li>
+    <li>Creare la nuova unita compilando codice, nome e eventuale unita padre.</li>
+    <li>Salvare e controllare che compaia nell'elenco.</li>
+    <li>Se necessario, modificare le unita esistenti prima di assegnarle ai dipendenti.</li>
+  </ol>
+  <p><b>Perche' ogni passo e' importante:</b> se si creano duplicati o gerarchie sbagliate, i report diventano confusi e le letture organizzative perdono valore.</p>
+  <p><b>Controlli finali:</b> ogni unita deve avere un nome coerente, una posizione logica e, se prevista, una parent corretta.</p>
+
+  <h3>5.2 JobRoles Admin</h3>
+  <p><b>Finalita:</b> definire le mansioni o ruoli professionali del tenant.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire <span class="code">/admin/job-roles</span>.</li>
+    <li>Verificare se il ruolo esiste gia.</li>
+    <li>Creare il ruolo con descrizione chiara e stabile nel tempo.</li>
+    <li>Salvare e poi usare il ruolo nelle anagrafiche dipendenti.</li>
+  </ol>
+  <p><b>Errore da evitare:</b> usare job role come se fossero ruoli autorizzativi. Non e' la loro funzione. Servono a classificare il lavoro, non a dare permessi di sistema.</p>
+
+  <h3>5.3 Employees Admin</h3>
+  <p><b>Finalita:</b> creare e mantenere l'anagrafica del dipendente nel tenant.</p>
+  <p><b>Quando usarla:</b> onboarding iniziale, inserimento nuove persone, correzione dati, cessazioni o pulizia anagrafica.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire <span class="code">/admin/employees</span>.</li>
+    <li>Cercare il dipendente per matricola, nome o email per evitare doppioni.</li>
+    <li>Se non esiste, creare un nuovo record.</li>
+    <li>Compilare con attenzione matricola, nome, cognome, email, stato attivo, org unit e job role.</li>
+    <li>Salvare e rileggere il record.</li>
+    <li>Solo dopo, passare a Identity Link per collegare l'utente di accesso.</li>
+  </ol>
+  <div class="box">
+    L'Employee e' il perno del sistema. Se manca o e' compilato male, il resto del processo non si aggancia correttamente.
+  </div>
+
+  <h2>6. Struttura gerarchica: Manager Relations e Org Chart</h2>
+
+  <h3>6.1 Manager Relations Admin</h3>
+  <p><b>Finalita:</b> definire la relazione reale tra manager e collaboratore. Questa pagina e' la fonte vera dello scope manageriale.</p>
+  <p><b>Perche' e' critica:</b> il manager vede i propri collaboratori in <span class="code">/team</span> solo se questa relazione esiste ed e' valida.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire <span class="code">/admin/manager-relations</span>.</li>
+    <li>Selezionare il dipendente subordinato.</li>
+    <li>Selezionare il manager dipendente.</li>
+    <li>Impostare il tipo relazione se previsto.</li>
+    <li>Valorizzare il flag primary se quella e' la relazione principale.</li>
+    <li>Impostare data inizio e, se necessaria, data fine.</li>
+    <li>Salvare e rileggere la relazione nell'elenco.</li>
+  </ol>
+  <p><b>Controlli finali:</b> la relazione deve essere temporalmente attiva e non ambigua. Se ci sono piu manager, deve essere chiaro quale sia il principale.</p>
+
+  <h3>6.2 Org Chart Admin</h3>
+  <p><b>Finalita:</b> offrire una vista read-only della struttura, utile per controllo e verifica.</p>
+  <p><b>Come usarla bene:</b> non e' una pagina di modifica, ma uno strumento di controllo. Serve per capire rapidamente se employee, org unit e relazioni manageriali restituiscono una fotografia credibile della struttura.</p>
+
+  <h2>7. Sicurezza funzionale: Identity Link</h2>
+  <p><b>Pagina:</b> <span class="code">/admin/identity-link</span></p>
+  <p><b>Finalita:</b> collegare l'utente ABP che fa login al corrispondente Employee.</p>
+  <p><b>Perche' e' decisiva:</b> senza identity link, l'utente entra ma non puo essere riconosciuto come persona del dominio HR.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire la pagina Identity Link.</li>
+    <li>Individuare l'utente applicativo e l'employee da collegare.</li>
+    <li>Verificare che non esista gia un link errato o duplicato.</li>
+    <li>Eseguire il collegamento.</li>
+    <li>Salvare e ricaricare l'elenco.</li>
+    <li>Testare il login dell'utente sulla pagina <span class="code">/my</span>.</li>
+  </ol>
+  <p><b>Finalita pratica di ogni passo:</b> il controllo preliminare evita di collegare un utente al dipendente sbagliato, che e' uno degli errori piu pericolosi e piu difficili da notare subito.</p>
+  <div class="warning">
+    Se cliccando <span class="code">/my</span> appare <span class="code">EmployeeNotLinkedToUser</span>, il primo controllo da fare e' proprio qui.
+  </div>
+
+  <h2 class="page-break">8. Workflow Admin: creare template, fasi, transizioni, permessi e field policy</h2>
+  <p><b>Pagina:</b> <span class="code">/admin/workflow</span></p>
+  <p><b>Finalita:</b> costruire il motore del processo di performance. E' la pagina piu delicata dell'area Admin, perche' qui si decide il comportamento della piattaforma.</p>
+
+  <h3>8.1 Cosa si fa in questa pagina</h3>
+  <ul>
+    <li>si crea un template;</li>
+    <li>si definiscono le fasi del template;</li>
+    <li>si definiscono le transizioni possibili;</li>
+    <li>si impostano role permissions per ogni fase;</li>
+    <li>si impostano field policy per ogni fase.</li>
+  </ul>
+
+  <h3>8.2 Passo 1: creare il template</h3>
+  <ol>
+    <li>Aprire Workflow Admin.</li>
+    <li>Nella sezione template cliccare creazione nuovo template.</li>
+    <li>Compilare nome del template.</li>
+    <li>Compilare versione.</li>
+    <li>Valutare se marcarlo come default.</li>
+    <li>Salvare.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> il template e' il contenitore logico del processo. Senza template non esistono fasi, permessi o regole per i cicli.</p>
+
+  <h3>8.3 Passo 2: creare le fasi</h3>
+  <ol>
+    <li>Selezionare il template appena creato.</li>
+    <li>Aprire la sezione delle fasi.</li>
+    <li>Creare una fase per ogni momento del processo, ad esempio SELF, MGR, HR.</li>
+    <li>Compilare codice, nome visualizzato e ordine logico.</li>
+    <li>Salvare ogni fase.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> la fase e' il punto in cui il participant "si trova" nel processo. Tutto cio che puo o non puo fare dipende da questa informazione.</p>
+
+  <h3>8.4 Passo 3: creare le transizioni</h3>
+  <ol>
+    <li>Passare alla sezione transizioni.</li>
+    <li>Per ogni passaggio consentito, scegliere fase di partenza e fase di arrivo.</li>
+    <li>Salvare la transizione.</li>
+    <li>Ripetere fino a coprire il percorso desiderato.</li>
+  </ol>
+  <p><b>Esempio:</b> SELF -&gt; MGR, poi MGR -&gt; HR.</p>
+  <p><b>Perche' si fa:</b> senza transizione il sistema non ha un percorso dichiarato. Una fase isolata non basta.</p>
+
+  <h3>8.5 Passo 4: configurare le Role Permissions</h3>
+  <ol>
+    <li>Selezionare una fase.</li>
+    <li>Aprire la sezione role permissions.</li>
+    <li>Per ogni ruolo rilevante, indicare se puo vedere e se puo modificare.</li>
+    <li>Salvare.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> questa e' la regola generale della fase. E' la prima barriera che dice se un ruolo ha potere operativo su quel participant.</p>
+
+  <h3>8.6 Passo 5: configurare le Field Policy</h3>
+  <ol>
+    <li>Restando sulla fase selezionata, aprire la sezione field policy.</li>
+    <li>Indicare il campo interessato.</li>
+    <li>Definire se per quel ruolo il campo e' Hidden, Read o Edit.</li>
+    <li>Salvare.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> le field policy servono a creare comportamenti molto precisi. Sono il punto chiave per tradurre il processo aziendale in regole reali di schermata.</p>
+
+  <h3>8.7 Caso d'uso importante: goals aggiornati solo dal manager</h3>
+  <p>Se l'azienda vuole che in fase SELF il dipendente non aggiorni i goals, ma il manager lo faccia in MGR, si configura cosi:</p>
+  <ul>
+    <li>fase SELF, ruolo Employee: campi goal in Read o Hidden;</li>
+    <li>fase SELF, ruolo Employee: altre sezioni self eventualmente ancora editabili;</li>
+    <li>fase MGR, ruolo Manager: campi goal in Edit.</li>
+  </ul>
+  <p>Questo consente una configurazione fine: il dipendente puo fare alcune attivita, ma non quelle che l'azienda vuole riservare al manager.</p>
+
+  <h3>8.8 Cancellazioni e modifiche da gestire con prudenza</h3>
+  <p>Un template gia usato in un ciclo o una fase gia referenziata devono essere trattati con molta cautela. Prima di eliminare bisogna capire se il processo e' gia in uso e se quella rimozione compromette dati o flussi esistenti.</p>
+
+  <h2>9. Goals: catalogo e assegnazioni</h2>
+
+  <h3>9.1 Goal Catalog Admin</h3>
+  <p><b>Pagina:</b> <span class="code">/admin/goal-catalog</span></p>
+  <p><b>Finalita:</b> costruire il catalogo dei goal standard del tenant, con categorie e pesi di default.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire il catalogo goal.</li>
+    <li>Creare un nuovo goal standard.</li>
+    <li>Compilare titolo, categoria, descrizione e peso se previsti.</li>
+    <li>Salvare.</li>
+    <li>Verificare che il goal compaia nell'elenco e sia pronto per le assegnazioni.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> usare un catalogo standard rende piu coerenti i cicli e piu semplice l'assegnazione ai participant.</p>
+
+  <h3>9.2 Goal Assignments Admin</h3>
+  <p><b>Pagina:</b> <span class="code">/admin/goal-assignments</span></p>
+  <p><b>Finalita:</b> assegnare goal da catalogo ai partecipanti di un ciclo selezionato.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire Goal Assignments Admin.</li>
+    <li>Selezionare il ciclo.</li>
+    <li>Selezionare il participant o il gruppo target previsto.</li>
+    <li>Scegliere il goal dal catalogo.</li>
+    <li>Confermare l'assegnazione.</li>
+    <li>Controllare che il goal risulti nella scheda del participant.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> l'assegnazione lega un obiettivo astratto del catalogo a una persona reale dentro un ciclo reale.</p>
+
+  <h2>10. Competenze e valutazioni: cataloghi, modelli, setup assessment</h2>
+
+  <h3>10.1 Competency Catalog Admin</h3>
+  <p><b>Finalita:</b> costruire il catalogo delle competenze del tenant.</p>
+  <p><b>Uso corretto:</b> creare competenze stabili, chiare e riusabili, evitando duplicazioni nominali.</p>
+
+  <h3>10.2 Competency Models Admin</h3>
+  <p><b>Finalita:</b> comporre modelli di valutazione usando le competenze del catalogo, definendo pesi, obbligatorieta e scale.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Creare il modello.</li>
+    <li>Aggiungere le competenze che ne fanno parte.</li>
+    <li>Per ogni competenza impostare peso, required item e scala se previsti.</li>
+    <li>Salvare.</li>
+    <li>Verificare che il modello sia pronto per gli assessment.</li>
+  </ol>
+
+  <h3>10.3 Assessment Setup Admin</h3>
+  <p><b>Finalita:</b> generare assessment per ciclo, participant, evaluator e competency model.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire <span class="code">/admin/assessment-setup</span>.</li>
+    <li>Selezionare il ciclo.</li>
+    <li>Selezionare i participant interessati.</li>
+    <li>Selezionare il modello competenze.</li>
+    <li>Selezionare l'evaluator o la logica prevista.</li>
+    <li>Generare gli assessment.</li>
+    <li>Verificare che risultino presenti nel participant corretto.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> il sistema deve sapere non solo cosa valutare, ma anche chi valuta e su quale partecipante.</p>
+
+  <h2>11. Cicli e partecipanti</h2>
+
+  <h3>11.1 Cycles Admin</h3>
+  <p><b>Pagina:</b> <span class="code">/admin/cycles</span></p>
+  <p><b>Finalita:</b> creare e governare i cicli di performance.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire Cycles Admin.</li>
+    <li>Creare un nuovo ciclo compilando nome, anno e altri dati richiesti.</li>
+    <li>Associare il workflow template corretto.</li>
+    <li>Salvare in Draft.</li>
+    <li>Rivedere i dati.</li>
+    <li>Attivare il ciclo solo quando setup e dati sono pronti.</li>
+  </ol>
+  <p><b>Perche' si fa cosi:</b> un ciclo attivato troppo presto genera processi incompleti e comportamenti incoerenti per gli utenti.</p>
+
+  <h3>11.2 Cycle Participants Admin</h3>
+  <p><b>Pagina:</b> <span class="code">/admin/cycle-participants</span></p>
+  <p><b>Finalita:</b> aggiungere i dipendenti a un ciclo, cercarli, gestire bulk add e, in casi controllati, fare reset di fase.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire la pagina partecipanti.</li>
+    <li>Selezionare il ciclo.</li>
+    <li>Aggiungere i dipendenti necessari, singolarmente o in massa se previsto.</li>
+    <li>Verificare per ogni participant la fase iniziale.</li>
+    <li>In caso di correzione, usare il reset fase con prudenza.</li>
+  </ol>
+  <p><b>Perche' il reset fase e' delicato:</b> spostare indietro o cambiare fase a un participant puo influenzare il workflow, la visibilita e le attese di processo.</p>
+
+  <h2>12. Import massivo</h2>
+  <p><b>Pagina:</b> <span class="code">/admin/performance-import</span></p>
+  <p><b>Finalita:</b> importare setup di performance in modo massivo con validazione completa e senza salvataggi parziali.</p>
+  <p><b>Cosa significa no partial save:</b> o il file e' coerente e viene importato tutto quanto previsto, oppure il sistema non consolida dati incompleti. Questo e' un vantaggio importante per la qualita del dato.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Preparare il file di import nel formato previsto.</li>
+    <li>Aprire la pagina import.</li>
+    <li>Caricare il file.</li>
+    <li>Leggere con attenzione la validazione.</li>
+    <li>Correggere eventuali errori bloccanti prima di confermare.</li>
+    <li>Eseguire l'import.</li>
+    <li>Controllare il messaggio finale e i dati risultanti.</li>
+  </ol>
+
+  <h2>13. Notifications Admin</h2>
+  <p><b>Pagina:</b> <span class="code">/admin/notifications</span></p>
+  <p><b>Finalita:</b> verificare configurazione email, template e invio di test.</p>
+  <p><b>Quando usarla:</b> durante setup iniziale, quando si cambia server SMTP o quando gli utenti segnalano mancate notifiche.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire la pagina notifications.</li>
+    <li>Controllare stato configurazione e parametri caricati.</li>
+    <li>Verificare provider, from address e host SMTP.</li>
+    <li>Lanciare un test di invio se disponibile.</li>
+    <li>Leggere l'esito.</li>
+  </ol>
+  <p><b>Nota importante:</b> un test fallito non significa sempre che l'applicazione sia sbagliata. Puo dipendere da relay negato, porta SMTP, SSL, whitelist o policy del server di posta.</p>
+
+  <h2>14. Production Readiness</h2>
+  <p><b>Pagina:</b> <span class="code">/admin/readiness</span></p>
+  <p><b>Finalita:</b> dare un cruscotto read-only che aiuti a capire se il tenant e' pronto per essere usato o promosso.</p>
+  <h4>Come usarla correttamente</h4>
+  <ol>
+    <li>Aprire la readiness del tenant.</li>
+    <li>Leggere i controlli uno per uno.</li>
+    <li>Non limitarsi al colore: capire il significato dell'anomalia.</li>
+    <li>Correggere nelle pagine competenti i problemi segnalati.</li>
+    <li>Ricaricare la readiness e verificare che il quadro migliori.</li>
+  </ol>
+  <p><b>Perche' e' utile:</b> evita di avviare utenti o cicli in un tenant ancora incompleto.</p>
+
+  <h2>15. Audit Log Admin</h2>
+  <p><b>Pagina:</b> <span class="code">/admin/audit-log</span></p>
+  <p><b>Finalita:</b> consultare eventi business per data, utente, azione, entita e tenant.</p>
+  <h4>Procedura passo-passo</h4>
+  <ol>
+    <li>Aprire la pagina audit log.</li>
+    <li>Impostare i filtri necessari: data, utente, azione, entita, tenant.</li>
+    <li>Eseguire la ricerca.</li>
+    <li>Leggere gli eventi in ordine cronologico.</li>
+    <li>Restringere o allargare i filtri fino a isolare il caso utile.</li>
+  </ol>
+  <p><b>Perche' si fa:</b> l'audit e' la memoria del sistema. Quando un utente dice "non ho fatto nulla" o "non so cosa sia successo", spesso qui si trova la risposta.</p>
+
+  <h2>16. Procedure operative tipiche</h2>
+
+  <h3>16.1 Onboarding di un nuovo dipendente</h3>
+  <ol>
+    <li>Creare o verificare Org Unit e Job Role.</li>
+    <li>Creare il record Employee.</li>
+    <li>Creare o verificare l'utente di accesso.</li>
+    <li>Eseguire Identity Link.</li>
+    <li>Inserire la Manager Relation.</li>
+    <li>Aggiungere il dipendente al ciclo corretto.</li>
+    <li>Verificare accesso a <span class="code">/my</span>.</li>
+  </ol>
+
+  <h3>16.2 Configurare un nuovo processo di performance</h3>
+  <ol>
+    <li>Definire o aggiornare cataloghi competenze e goal.</li>
+    <li>Creare o aggiornare il workflow template.</li>
+    <li>Creare il ciclo.</li>
+    <li>Aggiungere i participant.</li>
+    <li>Assegnare goal.</li>
+    <li>Generare assessment.</li>
+    <li>Controllare readiness.</li>
+    <li>Attivare il ciclo.</li>
+  </ol>
+
+  <h3>16.3 Correggere un problema utente su /my</h3>
+  <ol>
+    <li>Capire tenant e utente coinvolti.</li>
+    <li>Verificare Identity Link.</li>
+    <li>Verificare che esista un participant nel ciclo atteso.</li>
+    <li>Verificare fase corrente del participant.</li>
+    <li>Verificare field policy e role permission se il problema riguarda visibilita o modifica.</li>
+    <li>Verificare audit se serve ricostruzione storica.</li>
+  </ol>
+
+  <h2>17. Errori frequenti e come affrontarli</h2>
+  <table>
+    <tr>
+      <th>Problema</th>
+      <th>Significato probabile</th>
+      <th>Primo controllo da fare</th>
+    </tr>
+    <tr>
+      <td><span class="code">EmployeeNotLinkedToUser</span></td>
+      <td>Utente non collegato a un employee</td>
+      <td>Identity Link Admin</td>
+    </tr>
+    <tr>
+      <td>Manager non vede collaboratori</td>
+      <td>Relazione manageriale mancante o non valida</td>
+      <td>Manager Relations Admin</td>
+    </tr>
+    <tr>
+      <td>Dipendente vede ma non modifica</td>
+      <td>Workflow o field policy restrittiva</td>
+      <td>Workflow Admin</td>
+    </tr>
+    <tr>
+      <td>Goal non assegnato</td>
+      <td>Participant o assignment non completati</td>
+      <td>Cycle Participants e Goal Assignments</td>
+    </tr>
+    <tr>
+      <td>Email non inviate</td>
+      <td>Problema SMTP o relay</td>
+      <td>Notifications Admin</td>
+    </tr>
+    <tr>
+      <td>Dati assenti in un tenant</td>
+      <td>Tenant errato in URL o import incompleto</td>
+      <td>Controllo tenant e readiness</td>
+    </tr>
+  </table>
+
+  <h2>18. Checklist finali</h2>
+  <h3>18.1 Checklist prima di aprire il sistema agli utenti</h3>
+  <ul>
+    <li>Employees presenti e corretti</li>
+    <li>Identity Link completati</li>
+    <li>Manager Relations coerenti</li>
+    <li>Workflow template validato</li>
+    <li>Cycle creato con template corretto</li>
+    <li>Participants caricati</li>
+    <li>Goals e assessment impostati se previsti</li>
+    <li>Readiness senza criticita bloccanti</li>
+    <li>Notifications verificate per quanto possibile</li>
+  </ul>
+
+  <h3>18.2 Checklist prima di modificare una configurazione gia in uso</h3>
+  <ul>
+    <li>capire se la modifica impatta dati storici o solo nuovi casi;</li>
+    <li>verificare se il ciclo e' gia attivo;</li>
+    <li>verificare se il template e' gia usato;</li>
+    <li>se possibile, testare prima in staging;</li>
+    <li>tenere traccia delle modifiche importanti tramite audit o nota di rilascio interna.</li>
+  </ul>
+
+  <div class="success">
+    Messaggio finale per l'Admin: il sistema funziona bene quando il dato e' coerente, il workflow e' pensato prima di essere cliccato e ogni modifica viene fatta con consapevolezza del suo impatto sul processo.
+  </div>
+
+  <p class="small">Fine del manuale amministratore.</p>
+</body>
+</html>

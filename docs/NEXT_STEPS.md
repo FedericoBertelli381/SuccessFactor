@@ -76,21 +76,26 @@ Include:
 - STEP 51 completato: security review pre-deploy con hardening endpoint config e target employee scope.
 - STEP 52 completato: performance review con fix lookup My assessments e script indici DB.
 - STEP 53 completato: backup, restore e disaster recovery con runbook operativo, retention, rollback deploy e script SQL di verifica.
+- STEP 54 completato: deploy staging readiness con runbook, template configurazione e script publish.
 
 ## Prossimo step consigliato
 
-### STEP 54 - Deploy staging
+### STEP 55 - UAT finale
 
 Obiettivo:
-- provare un deploy completo prima della produzione.
+- validazione con utenti reali.
+- ricordare ed eseguire il test SSO Entra ID/ADFS rimandato dallo STEP 46.
+- ricordare ed eseguire il test SMTP end-to-end rimandato dallo STEP 49.
 
 Include:
-- configurazione ambiente staging.
-- connection string.
-- tenant.
-- SSO se disponibile.
-- smoke test completo.
-- correzioni post-test.
+- scenario employee.
+- scenario manager.
+- scenario HR.
+- scenario admin.
+- test SSO completo con provider aziendale reale.
+- test invio email completo con relay SMTP aziendale reale.
+- raccolta feedback.
+- bugfix prioritari.
 
 ---
 

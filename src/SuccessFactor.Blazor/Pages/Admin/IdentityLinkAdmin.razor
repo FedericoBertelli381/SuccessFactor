@@ -162,6 +162,89 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Import massivo Identity Link</strong>
+                <span class="badge text-bg-light">no partial save</span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    Formato: <code>Matricola;UserName;Email;MatchMode</code>.
+                    <br />
+                    <span>MatchMode supportati: <code>Auto</code>, <code>UserName</code>, <code>Email</code>. Con <code>Auto</code> il sistema prova prima UserName/Email del file e, se manca Email, usa l'email dell'employee.</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">CSV</label>
+                    <textarea class="form-control"
+                              rows="6"
+                              @bind="_importContent"
+                              placeholder="Matricola;UserName;Email;MatchMode"></textarea>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input type="checkbox" class="form-check-input" @bind="_importUpdateExistingLinks" />
+                    <label class="form-check-label">Aggiorna link esistenti se l'employee e gia collegato a un altro utente</label>
+                </div>
+
+                <button class="btn btn-primary"
+                        @onclick="ImportAsync"
+                        disabled="@(_importing || string.IsNullOrWhiteSpace(_importContent))">
+                    @if (_importing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Importa identity link
+                </button>
+
+                @if (_importResult is not null)
+                {
+                    <div class="mt-4">
+                        <div class="@(_importResult.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                            @if (_importResult.HasErrors)
+                            {
+                                <span>Import bloccato: correggi gli errori e riprova. Nessun collegamento e stato salvato.</span>
+                            }
+                            else
+                            {
+                                <span>Import completato. Nuovi link: @_importResult.LinkedCount, ricollegamenti: @_importResult.RelinkedCount.</span>
+                            }
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Riga</th>
+                                        <th>Matricola</th>
+                                        <th>UserName</th>
+                                        <th>Email</th>
+                                        <th>MatchMode</th>
+                                        <th>Status</th>
+                                        <th>Messaggio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _importResult.Rows)
+                                    {
+                                        <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                            <td>@row.RowNumber</td>
+                                            <td>@row.Matricola</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.UserName) ? "-" : row.UserName)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Email) ? "-" : row.Email)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.MatchMode) ? "-" : row.MatchMode)</td>
+                                            <td>@row.Status</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <strong>Employee gia collegati</strong>
@@ -220,8 +303,12 @@
     private string? _error;
     private string? _successMessage;
     private string? _userSearch;
+    private string? _importContent;
     private Guid? _selectedEmployeeId;
     private Guid? _selectedUserId;
+    private bool _importing;
+    private bool _importUpdateExistingLinks;
+    private EmployeeUserLinkImportResultDto? _importResult;
     private List<UnlinkedEmployeeDto> _unlinkedEmployees = [];
     private List<LinkedEmployeeDto> _linkedEmployees = [];
     private List<IdentityUserLookupDto> _userResults = [];
@@ -333,6 +420,36 @@
         finally
         {
             _linking = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _importing = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            _importResult = await EmployeeUserLinkAppService.ImportAsync(new ImportEmployeeUserLinksInput
+            {
+                Content = _importContent ?? string.Empty,
+                UpdateExistingLinks = _importUpdateExistingLinks
+            });
+
+            if (!_importResult.HasErrors)
+            {
+                _successMessage = $"Import identity link completato. Nuovi link: {_importResult.LinkedCount}, ricollegamenti: {_importResult.RelinkedCount}.";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _importing = false;
         }
     }
 

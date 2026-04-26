@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using SuccessFactor.Auditing;
+using SuccessFactor.Cycles;
 using SuccessFactor.Process;
 using SuccessFactor.Security;
 using SuccessFactor.Workflow;
@@ -22,8 +23,11 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
     private readonly IAsyncQueryableExecuter _asyncExecuter;
     private readonly IRepository<ProcessTemplate, Guid> _templateRepository;
     private readonly IRepository<ProcessPhase, Guid> _phaseRepository;
+    private readonly IRepository<PhaseTransition, Guid> _transitionRepository;
     private readonly IRepository<PhaseRolePermission, Guid> _rolePermissionRepository;
     private readonly IRepository<PhaseFieldPolicy, Guid> _fieldPolicyRepository;
+    private readonly IRepository<Cycle, Guid> _cycleRepository;
+    private readonly IRepository<CycleParticipant, Guid> _cycleParticipantRepository;
     private readonly IBusinessAuditLogger _auditLogger;
 
     public WorkflowAdminAppService(
@@ -31,16 +35,22 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         IAsyncQueryableExecuter asyncExecuter,
         IRepository<ProcessTemplate, Guid> templateRepository,
         IRepository<ProcessPhase, Guid> phaseRepository,
+        IRepository<PhaseTransition, Guid> transitionRepository,
         IRepository<PhaseRolePermission, Guid> rolePermissionRepository,
         IRepository<PhaseFieldPolicy, Guid> fieldPolicyRepository,
+        IRepository<Cycle, Guid> cycleRepository,
+        IRepository<CycleParticipant, Guid> cycleParticipantRepository,
         IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
         _templateRepository = templateRepository;
         _phaseRepository = phaseRepository;
+        _transitionRepository = transitionRepository;
         _rolePermissionRepository = rolePermissionRepository;
         _fieldPolicyRepository = fieldPolicyRepository;
+        _cycleRepository = cycleRepository;
+        _cycleParticipantRepository = cycleParticipantRepository;
         _auditLogger = auditLogger;
     }
 
@@ -61,13 +71,9 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         {
             SelectedTemplateId = selectedTemplate?.Id,
             SelectedTemplateName = selectedTemplate?.Name,
-            Templates = templates.Select(x => new WorkflowTemplateLookupDto
-            {
-                TemplateId = x.Id,
-                TemplateName = x.Name,
-                Version = x.Version,
-                IsDefault = x.IsDefault
-            }).ToList()
+            SelectedTemplateVersion = selectedTemplate?.Version,
+            SelectedTemplateIsDefault = selectedTemplate?.IsDefault ?? false,
+            Templates = templates.Select(MapTemplate).ToList()
         };
 
         if (selectedTemplate is null)
@@ -82,17 +88,21 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
                 .OrderBy(x => x.PhaseOrder)
                 .ThenBy(x => x.Code));
 
-        var selectedPhase = ResolveSelectedPhase(phases, input.PhaseId);
+        dto.Phases = phases.Select(MapPhase).ToList();
 
-        dto.Phases = phases.Select(x => new WorkflowPhaseLookupDto
-        {
-            PhaseId = x.Id,
-            TemplateId = x.TemplateId,
-            PhaseCode = x.Code,
-            PhaseName = x.Name,
-            PhaseOrder = x.PhaseOrder,
-            IsTerminal = x.IsTerminal
-        }).ToList();
+        var transitionQuery = await _transitionRepository.GetQueryableAsync();
+        var transitions = await _asyncExecuter.ToListAsync(
+            transitionQuery
+                .Where(x => x.TemplateId == selectedTemplate.Id));
+
+        var phaseById = phases.ToDictionary(x => x.Id);
+        dto.Transitions = transitions
+            .Select(x => MapTransition(x, phaseById))
+            .OrderBy(x => x.FromPhaseCode)
+            .ThenBy(x => x.ToPhaseCode)
+            .ToList();
+
+        var selectedPhase = ResolveSelectedPhase(phases, input.PhaseId);
         dto.SelectedPhaseId = selectedPhase?.Id;
         dto.SelectedPhaseCode = selectedPhase?.Code;
         dto.SelectedPhaseName = selectedPhase?.Name;
@@ -120,6 +130,251 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             .ToList();
 
         return dto;
+    }
+
+    public async Task<WorkflowTemplateLookupDto> SaveTemplateAsync(Guid? id, CreateUpdateProcessTemplateDto input)
+    {
+        EnsureTenantAndAdmin();
+
+        var templateName = NormalizeRequired(input.Name, "TemplateName");
+        ValidateVersion(input.Version);
+
+        if (id.HasValue)
+        {
+            await EnsureNoDuplicateTemplateAsync(templateName, input.Version, id);
+
+            var entity = await _templateRepository.GetAsync(id.Value);
+            entity.Name = templateName;
+            entity.Version = input.Version;
+            entity.IsDefault = input.IsDefault;
+
+            if (input.IsDefault)
+            {
+                await ClearOtherDefaultsAsync(entity.Id);
+            }
+
+            entity = await _templateRepository.UpdateAsync(entity, autoSave: true);
+
+            await _auditLogger.LogAsync("WorkflowTemplateSaved", nameof(ProcessTemplate), entity.Id.ToString(), new Dictionary<string, object?>
+            {
+                ["ChangeType"] = "Update",
+                ["Name"] = entity.Name,
+                ["Version"] = entity.Version,
+                ["IsDefault"] = entity.IsDefault
+            });
+
+            return MapTemplate(entity);
+        }
+
+        await EnsureNoDuplicateTemplateAsync(templateName, input.Version, null);
+
+        var created = await _templateRepository.InsertAsync(new ProcessTemplate
+        {
+            TenantId = CurrentTenant.Id,
+            Name = templateName,
+            Version = input.Version,
+            IsDefault = input.IsDefault
+        }, autoSave: true);
+
+        if (input.IsDefault)
+        {
+            await ClearOtherDefaultsAsync(created.Id);
+            created = await _templateRepository.GetAsync(created.Id);
+        }
+
+        await _auditLogger.LogAsync("WorkflowTemplateSaved", nameof(ProcessTemplate), created.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["ChangeType"] = "Create",
+            ["Name"] = created.Name,
+            ["Version"] = created.Version,
+            ["IsDefault"] = created.IsDefault
+        });
+
+        return MapTemplate(created);
+    }
+
+    public async Task DeleteTemplateAsync(Guid id)
+    {
+        EnsureTenantAndAdmin();
+
+        var template = await _templateRepository.GetAsync(id);
+
+        if (await _cycleRepository.AnyAsync(x => x.TemplateId == id))
+        {
+            throw new BusinessException("WorkflowTemplateInUseByCycle");
+        }
+
+        if (await _phaseRepository.AnyAsync(x => x.TemplateId == id)
+            || await _transitionRepository.AnyAsync(x => x.TemplateId == id)
+            || await _rolePermissionRepository.AnyAsync(x => x.TemplateId == id)
+            || await _fieldPolicyRepository.AnyAsync(x => x.TemplateId == id))
+        {
+            throw new BusinessException("WorkflowTemplateHasChildren");
+        }
+
+        await _templateRepository.DeleteAsync(id);
+        await _auditLogger.LogAsync("WorkflowTemplateDeleted", nameof(ProcessTemplate), id.ToString(), new Dictionary<string, object?>
+        {
+            ["Name"] = template.Name,
+            ["Version"] = template.Version
+        });
+    }
+
+    public async Task<WorkflowPhaseLookupDto> SavePhaseAsync(Guid? id, CreateUpdateProcessPhaseDto input)
+    {
+        EnsureTenantAndAdmin();
+        await EnsureTemplateExistsAsync(input.TemplateId);
+
+        var phaseCode = NormalizeRequired(input.Code, "PhaseCode");
+        var phaseName = NormalizeRequired(input.Name, "PhaseName");
+
+        if (id.HasValue)
+        {
+            await EnsureNoDuplicatePhaseAsync(input.TemplateId, phaseCode, id);
+
+            var entity = await _phaseRepository.GetAsync(id.Value);
+            entity.TemplateId = input.TemplateId;
+            entity.Code = phaseCode;
+            entity.Name = phaseName;
+            entity.PhaseOrder = input.PhaseOrder;
+            entity.IsTerminal = input.IsTerminal;
+            entity.StartRule = NormalizeNullable(input.StartRule);
+            entity.EndRule = NormalizeNullable(input.EndRule);
+
+            entity = await _phaseRepository.UpdateAsync(entity, autoSave: true);
+
+            await _auditLogger.LogAsync("WorkflowPhaseSaved", nameof(ProcessPhase), entity.Id.ToString(), new Dictionary<string, object?>
+            {
+                ["ChangeType"] = "Update",
+                ["TemplateId"] = entity.TemplateId,
+                ["Code"] = entity.Code,
+                ["Name"] = entity.Name,
+                ["PhaseOrder"] = entity.PhaseOrder,
+                ["IsTerminal"] = entity.IsTerminal
+            });
+
+            return MapPhase(entity);
+        }
+
+        await EnsureNoDuplicatePhaseAsync(input.TemplateId, phaseCode, null);
+
+        var created = await _phaseRepository.InsertAsync(new ProcessPhase
+        {
+            TemplateId = input.TemplateId,
+            Code = phaseCode,
+            Name = phaseName,
+            PhaseOrder = input.PhaseOrder,
+            IsTerminal = input.IsTerminal,
+            StartRule = NormalizeNullable(input.StartRule),
+            EndRule = NormalizeNullable(input.EndRule)
+        }, autoSave: true);
+
+        await _auditLogger.LogAsync("WorkflowPhaseSaved", nameof(ProcessPhase), created.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["ChangeType"] = "Create",
+            ["TemplateId"] = created.TemplateId,
+            ["Code"] = created.Code,
+            ["Name"] = created.Name,
+            ["PhaseOrder"] = created.PhaseOrder,
+            ["IsTerminal"] = created.IsTerminal
+        });
+
+        return MapPhase(created);
+    }
+
+    public async Task DeletePhaseAsync(Guid id)
+    {
+        EnsureTenantAndAdmin();
+
+        var phase = await _phaseRepository.GetAsync(id);
+
+        if (await _cycleRepository.AnyAsync(x => x.CurrentPhaseId == id)
+            || await _cycleParticipantRepository.AnyAsync(x => x.CurrentPhaseId == id))
+        {
+            throw new BusinessException("WorkflowPhaseInUse");
+        }
+
+        if (await _transitionRepository.AnyAsync(x => x.FromPhaseId == id || x.ToPhaseId == id)
+            || await _rolePermissionRepository.AnyAsync(x => x.PhaseId == id)
+            || await _fieldPolicyRepository.AnyAsync(x => x.PhaseId == id))
+        {
+            throw new BusinessException("WorkflowPhaseHasChildren");
+        }
+
+        await _phaseRepository.DeleteAsync(id);
+        await _auditLogger.LogAsync("WorkflowPhaseDeleted", nameof(ProcessPhase), id.ToString(), new Dictionary<string, object?>
+        {
+            ["TemplateId"] = phase.TemplateId,
+            ["Code"] = phase.Code,
+            ["Name"] = phase.Name
+        });
+    }
+
+    public async Task<WorkflowTransitionAdminDto> SaveTransitionAsync(Guid? id, CreateUpdatePhaseTransitionDto input)
+    {
+        EnsureTenantAndAdmin();
+        await EnsureTemplateAndTransitionPhasesAsync(input);
+
+        if (input.FromPhaseId == input.ToPhaseId)
+        {
+            throw new BusinessException("WorkflowTransitionSamePhase");
+        }
+
+        if (id.HasValue)
+        {
+            await EnsureNoDuplicateTransitionAsync(input.TemplateId, input.FromPhaseId, input.ToPhaseId, id);
+
+            var entity = await _transitionRepository.GetAsync(id.Value);
+            entity.TemplateId = input.TemplateId;
+            entity.FromPhaseId = input.FromPhaseId;
+            entity.ToPhaseId = input.ToPhaseId;
+            entity.ConditionExpr = NormalizeNullable(input.ConditionExpr);
+
+            entity = await _transitionRepository.UpdateAsync(entity, autoSave: true);
+
+            await _auditLogger.LogAsync("WorkflowTransitionSaved", nameof(PhaseTransition), entity.Id.ToString(), new Dictionary<string, object?>
+            {
+                ["ChangeType"] = "Update",
+                ["TemplateId"] = entity.TemplateId,
+                ["FromPhaseId"] = entity.FromPhaseId,
+                ["ToPhaseId"] = entity.ToPhaseId
+            });
+
+            return await MapTransitionAsync(entity);
+        }
+
+        await EnsureNoDuplicateTransitionAsync(input.TemplateId, input.FromPhaseId, input.ToPhaseId, null);
+
+        var created = await _transitionRepository.InsertAsync(new PhaseTransition
+        {
+            TemplateId = input.TemplateId,
+            FromPhaseId = input.FromPhaseId,
+            ToPhaseId = input.ToPhaseId,
+            ConditionExpr = NormalizeNullable(input.ConditionExpr)
+        }, autoSave: true);
+
+        await _auditLogger.LogAsync("WorkflowTransitionSaved", nameof(PhaseTransition), created.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["ChangeType"] = "Create",
+            ["TemplateId"] = created.TemplateId,
+            ["FromPhaseId"] = created.FromPhaseId,
+            ["ToPhaseId"] = created.ToPhaseId
+        });
+
+        return await MapTransitionAsync(created);
+    }
+
+    public async Task DeleteTransitionAsync(Guid id)
+    {
+        EnsureTenantAndAdmin();
+        var entity = await _transitionRepository.GetAsync(id);
+        await _transitionRepository.DeleteAsync(id);
+        await _auditLogger.LogAsync("WorkflowTransitionDeleted", nameof(PhaseTransition), id.ToString(), new Dictionary<string, object?>
+        {
+            ["TemplateId"] = entity.TemplateId,
+            ["FromPhaseId"] = entity.FromPhaseId,
+            ["ToPhaseId"] = entity.ToPhaseId
+        });
     }
 
     public async Task<PhaseRolePermissionDto> SaveRolePermissionAsync(Guid? id, CreateUpdatePhaseRolePermissionDto input)
@@ -266,7 +521,6 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         }
 
         var roles = _currentUser.Roles ?? Array.Empty<string>();
-
         if (!SuccessFactorRoles.IsAdmin(roles))
         {
             throw new BusinessException("CurrentUserIsNotAdmin");
@@ -296,6 +550,68 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
         }
     }
 
+    private async Task EnsureTemplateExistsAsync(Guid templateId)
+    {
+        if (templateId == Guid.Empty)
+        {
+            throw new BusinessException("TemplateIdRequired");
+        }
+
+        if (!await _templateRepository.AnyAsync(x => x.Id == templateId))
+        {
+            throw new BusinessException("WorkflowAdminTemplateNotFound");
+        }
+    }
+
+    private async Task EnsureTemplateAndTransitionPhasesAsync(CreateUpdatePhaseTransitionDto input)
+    {
+        await EnsureTemplateExistsAsync(input.TemplateId);
+
+        if (!await _phaseRepository.AnyAsync(x => x.Id == input.FromPhaseId && x.TemplateId == input.TemplateId))
+        {
+            throw new BusinessException("FromPhaseNotInTemplate");
+        }
+
+        if (!await _phaseRepository.AnyAsync(x => x.Id == input.ToPhaseId && x.TemplateId == input.TemplateId))
+        {
+            throw new BusinessException("ToPhaseNotInTemplate");
+        }
+    }
+
+    private async Task EnsureNoDuplicateTemplateAsync(string name, int version, Guid? excludeId)
+    {
+        if (await _templateRepository.AnyAsync(x =>
+            x.Name == name &&
+            x.Version == version &&
+            (!excludeId.HasValue || x.Id != excludeId.Value)))
+        {
+            throw new BusinessException("WorkflowTemplateAlreadyExists");
+        }
+    }
+
+    private async Task EnsureNoDuplicatePhaseAsync(Guid templateId, string code, Guid? excludeId)
+    {
+        if (await _phaseRepository.AnyAsync(x =>
+            x.TemplateId == templateId &&
+            x.Code == code &&
+            (!excludeId.HasValue || x.Id != excludeId.Value)))
+        {
+            throw new BusinessException("WorkflowPhaseAlreadyExists");
+        }
+    }
+
+    private async Task EnsureNoDuplicateTransitionAsync(Guid templateId, Guid fromPhaseId, Guid toPhaseId, Guid? excludeId)
+    {
+        if (await _transitionRepository.AnyAsync(x =>
+            x.TemplateId == templateId &&
+            x.FromPhaseId == fromPhaseId &&
+            x.ToPhaseId == toPhaseId &&
+            (!excludeId.HasValue || x.Id != excludeId.Value)))
+        {
+            throw new BusinessException("WorkflowTransitionAlreadyExists");
+        }
+    }
+
     private async Task EnsureNoDuplicateRolePermissionAsync(Guid templateId, Guid phaseId, string roleCode, Guid? excludeId)
     {
         if (await _rolePermissionRepository.AnyAsync(x =>
@@ -318,6 +634,17 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             (!excludeId.HasValue || x.Id != excludeId.Value)))
         {
             throw new BusinessException("PhaseFieldPolicyAlreadyExists");
+        }
+    }
+
+    private async Task ClearOtherDefaultsAsync(Guid excludeId)
+    {
+        var defaults = await _templateRepository.GetListAsync(x => x.IsDefault && x.Id != excludeId);
+
+        foreach (var item in defaults)
+        {
+            item.IsDefault = false;
+            await _templateRepository.UpdateAsync(item, autoSave: true);
         }
     }
 
@@ -367,6 +694,55 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             .OrderBy(x => x.PhaseOrder)
             .ThenBy(x => x.Code)
             .First();
+    }
+
+    private static WorkflowTemplateLookupDto MapTemplate(ProcessTemplate source)
+    {
+        return new WorkflowTemplateLookupDto
+        {
+            TemplateId = source.Id,
+            TemplateName = source.Name,
+            Version = source.Version,
+            IsDefault = source.IsDefault
+        };
+    }
+
+    private static WorkflowPhaseLookupDto MapPhase(ProcessPhase source)
+    {
+        return new WorkflowPhaseLookupDto
+        {
+            PhaseId = source.Id,
+            TemplateId = source.TemplateId,
+            PhaseCode = source.Code,
+            PhaseName = source.Name,
+            PhaseOrder = source.PhaseOrder,
+            IsTerminal = source.IsTerminal
+        };
+    }
+
+    private static WorkflowTransitionAdminDto MapTransition(PhaseTransition source, IReadOnlyDictionary<Guid, ProcessPhase> phaseById)
+    {
+        phaseById.TryGetValue(source.FromPhaseId, out var fromPhase);
+        phaseById.TryGetValue(source.ToPhaseId, out var toPhase);
+
+        return new WorkflowTransitionAdminDto
+        {
+            Id = source.Id,
+            TemplateId = source.TemplateId,
+            FromPhaseId = source.FromPhaseId,
+            FromPhaseCode = fromPhase?.Code ?? "-",
+            FromPhaseName = fromPhase?.Name ?? "-",
+            ToPhaseId = source.ToPhaseId,
+            ToPhaseCode = toPhase?.Code ?? "-",
+            ToPhaseName = toPhase?.Name ?? "-",
+            ConditionExpr = source.ConditionExpr
+        };
+    }
+
+    private async Task<WorkflowTransitionAdminDto> MapTransitionAsync(PhaseTransition source)
+    {
+        var phases = await _phaseRepository.GetListAsync(x => x.Id == source.FromPhaseId || x.Id == source.ToPhaseId);
+        return MapTransition(source, phases.ToDictionary(x => x.Id));
     }
 
     private static PhaseRolePermissionDto MapRolePermission(PhaseRolePermission source)
@@ -429,4 +805,12 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
 
     private static string? NormalizeNullable(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void ValidateVersion(int version)
+    {
+        if (version <= 0)
+        {
+            throw new BusinessException("TemplateVersionInvalid");
+        }
+    }
 }

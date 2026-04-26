@@ -1,9 +1,11 @@
 @page "/admin/workflow"
 @attribute [Authorize(Roles = SuccessFactorRoles.Admin)]
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.WebUtilities
 @using SuccessFactor.Admin
+@using SuccessFactor.Process
 @using SuccessFactor.Workflow
 @inject IWorkflowAdminAppService WorkflowAdminAppService
 @inject NavigationManager NavigationManager
@@ -14,11 +16,14 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h2 class="mb-1">Workflow Admin</h2>
+            <div class="text-muted">Crea template, definisci fasi e transizioni, poi configura permessi e field policy.</div>
 
             @if (_data is not null && _data.SelectedTemplateId.HasValue)
             {
-                <div class="text-muted">
-                    template: @_data.SelectedTemplateName
+                <div class="text-muted mt-1">
+                    template: <strong>@_data.SelectedTemplateName</strong>
+                    <span class="mx-2">-</span>
+                    versione: @_data.SelectedTemplateVersion
                     <span class="mx-2">-</span>
                     fase: <strong>@(_data.SelectedPhaseCode ?? "-")</strong>
                 </div>
@@ -54,7 +59,7 @@
     else if (_data is not null)
     {
         <div class="row g-3 mb-4">
-            <div class="col-12 col-xl-6">
+            <div class="col-12 col-xl-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-white">
                         <strong>Selezione</strong>
@@ -103,35 +108,314 @@
                             template: @_data.Templates.Count
                             <br />
                             fasi: @_data.Phases.Count
+                            <br />
+                            transizioni: @_data.Transitions.Count
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-12 col-xl-6">
+            <div class="col-12 col-xl-8">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-white">
                         <strong>Contesto</strong>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-4">
                                 <div class="text-muted small">Template</div>
                                 <div class="fw-semibold">@(_data.SelectedTemplateName ?? "-")</div>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-2">
+                                <div class="text-muted small">Versione</div>
+                                <div>@(_data.SelectedTemplateVersion?.ToString() ?? "-")</div>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <div class="text-muted small">Default</div>
+                                <div>@YesNo(_data.SelectedTemplateIsDefault)</div>
+                            </div>
+                            <div class="col-12 col-md-4">
                                 <div class="text-muted small">Fase</div>
                                 <div>@(string.IsNullOrWhiteSpace(_data.SelectedPhaseCode) ? "-" : $"{_data.SelectedPhaseCode} - {_data.SelectedPhaseName}")</div>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-4">
                                 <div class="text-muted small">Role permissions</div>
                                 <div>@_data.RolePermissions.Count</div>
                             </div>
-                            <div class="col-12 col-md-6">
+                            <div class="col-12 col-md-4">
                                 <div class="text-muted small">Field policies</div>
                                 <div>@_data.FieldPolicies.Count</div>
                             </div>
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Transizioni</div>
+                                <div>@_data.Transitions.Count</div>
+                            </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Template</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetTemplateForm">Nuovo</button>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="_templateForm" OnValidSubmit="SaveTemplateAsync">
+                            <DataAnnotationsValidator />
+                            <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-12">
+                                    <label class="form-label">Nome template</label>
+                                    <InputText class="form-control" @bind-Value="_templateForm.Name" />
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Versione</label>
+                                    <InputNumber class="form-control" @bind-Value="_templateForm.Version" />
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Default</label>
+                                    <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_templateForm.IsDefault" />
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mb-4">
+                                <button class="btn btn-primary" type="submit" disabled="@_savingTemplate">Salva template</button>
+                                @if (_templateForm.Id.HasValue)
+                                {
+                                    <button class="btn btn-outline-danger" type="button" @onclick="DeleteTemplateAsync" disabled="@_savingTemplate">Elimina</button>
+                                }
+                            </div>
+                        </EditForm>
+
+                        @if (_data.Templates.Count == 0)
+                        {
+                            <div class="text-muted">Nessun template configurato.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Versione</th>
+                                            <th>Default</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _data.Templates)
+                                        {
+                                            <tr class="@(item.TemplateId == _selectedTemplateId ? "table-active" : null)">
+                                                <td class="fw-semibold">@item.TemplateName</td>
+                                                <td>@item.Version</td>
+                                                <td>@YesNo(item.IsDefault)</td>
+                                                <td class="text-end">
+                                                    <div class="d-flex justify-content-end gap-2">
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditTemplate(item)">Modifica</button>
+                                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => SelectTemplate(item.TemplateId)">Apri</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Fasi</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetPhaseForm" disabled="@(!_selectedTemplateId.HasValue)">Nuova</button>
+                    </div>
+                    <div class="card-body">
+                        @if (!_selectedTemplateId.HasValue)
+                        {
+                            <div class="text-muted">Seleziona o crea prima un template.</div>
+                        }
+                        else
+                        {
+                            <EditForm Model="_phaseForm" OnValidSubmit="SavePhaseAsync">
+                                <DataAnnotationsValidator />
+                                <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">Code</label>
+                                        <InputText class="form-control" @bind-Value="_phaseForm.Code" />
+                                    </div>
+                                    <div class="col-12 col-md-8">
+                                        <label class="form-label">Nome fase</label>
+                                        <InputText class="form-control" @bind-Value="_phaseForm.Name" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">Ordine</label>
+                                        <InputNumber class="form-control" @bind-Value="_phaseForm.PhaseOrder" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">Terminale</label>
+                                        <InputCheckbox class="form-check-input d-block mt-2" @bind-Value="_phaseForm.IsTerminal" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">StartRule</label>
+                                        <InputText class="form-control" @bind-Value="_phaseForm.StartRule" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">EndRule</label>
+                                        <InputText class="form-control" @bind-Value="_phaseForm.EndRule" />
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mb-4">
+                                    <button class="btn btn-primary" type="submit" disabled="@_savingPhase">Salva fase</button>
+                                    @if (_phaseForm.Id.HasValue)
+                                    {
+                                        <button class="btn btn-outline-danger" type="button" @onclick="DeletePhaseAsync" disabled="@_savingPhase">Elimina</button>
+                                    }
+                                </div>
+                            </EditForm>
+
+                            @if (_data.Phases.Count == 0)
+                            {
+                                <div class="text-muted">Nessuna fase configurata.</div>
+                            }
+                            else
+                            {
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Ordine</th>
+                                                <th>Code</th>
+                                                <th>Nome</th>
+                                                <th>Terminale</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in _data.Phases)
+                                            {
+                                                <tr class="@(item.PhaseId == _selectedPhaseId ? "table-active" : null)">
+                                                    <td>@item.PhaseOrder</td>
+                                                    <td class="fw-semibold">@item.PhaseCode</td>
+                                                    <td>@item.PhaseName</td>
+                                                    <td>@YesNo(item.IsTerminal)</td>
+                                                    <td class="text-end">
+                                                        <div class="d-flex justify-content-end gap-2">
+                                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditPhase(item)">Modifica</button>
+                                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => SelectPhase(item.PhaseId)">Apri</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong>Transizioni</strong>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ResetTransitionForm" disabled="@(!_selectedTemplateId.HasValue || _data.Phases.Count < 2)">Nuova</button>
+                    </div>
+                    <div class="card-body">
+                        @if (!_selectedTemplateId.HasValue)
+                        {
+                            <div class="text-muted">Seleziona o crea prima un template.</div>
+                        }
+                        else if (_data.Phases.Count < 2)
+                        {
+                            <div class="text-muted">Servono almeno due fasi per creare una transizione.</div>
+                        }
+                        else
+                        {
+                            <EditForm Model="_transitionForm" OnValidSubmit="SaveTransitionAsync">
+                                <DataAnnotationsValidator />
+                                <Microsoft.AspNetCore.Components.Forms.ValidationSummary />
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Da fase</label>
+                                        <InputSelect class="form-select" @bind-Value="_transitionForm.FromPhaseId">
+                                            <option value="">Seleziona fase origine</option>
+                                            @foreach (var phase in _data.Phases)
+                                            {
+                                                <option value="@phase.PhaseId">@phase.PhaseOrder - @phase.PhaseCode</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">A fase</label>
+                                        <InputSelect class="form-select" @bind-Value="_transitionForm.ToPhaseId">
+                                            <option value="">Seleziona fase destinazione</option>
+                                            @foreach (var phase in _data.Phases)
+                                            {
+                                                <option value="@phase.PhaseId">@phase.PhaseOrder - @phase.PhaseCode</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">ConditionExpr</label>
+                                        <InputText class="form-control" @bind-Value="_transitionForm.ConditionExpr" />
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mb-4">
+                                    <button class="btn btn-primary" type="submit" disabled="@_savingTransition">Salva transizione</button>
+                                    @if (_transitionForm.Id.HasValue)
+                                    {
+                                        <button class="btn btn-outline-danger" type="button" @onclick="DeleteTransitionAsync" disabled="@_savingTransition">Elimina</button>
+                                    }
+                                </div>
+                            </EditForm>
+                        }
+
+                        @if (_data.Transitions.Count == 0)
+                        {
+                            <div class="text-muted">Nessuna transizione configurata.</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Da</th>
+                                            <th>A</th>
+                                            <th>Condition</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in _data.Transitions)
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">@item.FromPhaseCode</td>
+                                                <td>@item.ToPhaseCode</td>
+                                                <td>@(string.IsNullOrWhiteSpace(item.ConditionExpr) ? "-" : item.ConditionExpr)</td>
+                                                <td class="text-end">
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditTransition(item)">Modifica</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -322,6 +606,9 @@
     public Guid? PhaseId { get; set; }
 
     private bool _loading;
+    private bool _savingTemplate;
+    private bool _savingPhase;
+    private bool _savingTransition;
     private bool _savingRolePermission;
     private bool _savingFieldPolicy;
     private string? _error;
@@ -329,6 +616,9 @@
     private WorkflowAdminDto? _data;
     private Guid? _selectedTemplateId;
     private Guid? _selectedPhaseId;
+    private TemplateFormModel _templateForm = new();
+    private PhaseFormModel _phaseForm = new();
+    private TransitionFormModel _transitionForm = new();
     private RolePermissionFormModel _rolePermissionForm = new();
     private FieldPolicyFormModel _fieldPolicyForm = new();
 
@@ -360,6 +650,9 @@
             _selectedTemplateId = _data.SelectedTemplateId;
             _selectedPhaseId = _data.SelectedPhaseId;
 
+            ResetTemplateForm();
+            ResetPhaseForm();
+            ResetTransitionForm();
             ResetRolePermissionForm();
             ResetFieldPolicyForm();
         }
@@ -377,6 +670,7 @@
     {
         if (!Guid.TryParse(e.Value?.ToString(), out var templateId))
         {
+            NavigationManager.NavigateTo(BuildUrl(null, null));
             return Task.CompletedTask;
         }
 
@@ -390,12 +684,259 @@
     {
         if (!Guid.TryParse(e.Value?.ToString(), out var phaseId))
         {
+            NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, null));
             return Task.CompletedTask;
         }
 
         _selectedPhaseId = phaseId;
         NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, _selectedPhaseId));
         return Task.CompletedTask;
+    }
+
+    private void SelectTemplate(Guid templateId)
+    {
+        NavigationManager.NavigateTo(BuildUrl(templateId, null));
+    }
+
+    private void SelectPhase(Guid phaseId)
+    {
+        NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, phaseId));
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        _savingTemplate = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var saved = await WorkflowAdminAppService.SaveTemplateAsync(_templateForm.Id, new CreateUpdateProcessTemplateDto
+            {
+                Name = _templateForm.Name ?? string.Empty,
+                Version = _templateForm.Version,
+                IsDefault = _templateForm.IsDefault
+            });
+
+            _successMessage = "Template salvato correttamente.";
+            NavigationManager.NavigateTo(BuildUrl(saved.TemplateId, null));
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _savingTemplate = false;
+        }
+    }
+
+    private async Task DeleteTemplateAsync()
+    {
+        if (!_templateForm.Id.HasValue)
+        {
+            return;
+        }
+
+        _savingTemplate = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.DeleteTemplateAsync(_templateForm.Id.Value);
+            _successMessage = "Template eliminato correttamente.";
+            NavigationManager.NavigateTo(BuildUrl(null, null));
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _savingTemplate = false;
+        }
+    }
+
+    private void EditTemplate(WorkflowTemplateLookupDto item)
+    {
+        _templateForm = new TemplateFormModel
+        {
+            Id = item.TemplateId,
+            Name = item.TemplateName,
+            Version = item.Version,
+            IsDefault = item.IsDefault
+        };
+    }
+
+    private void ResetTemplateForm()
+    {
+        _templateForm = new TemplateFormModel
+        {
+            Version = _data?.SelectedTemplateVersion ?? 1
+        };
+    }
+
+    private async Task SavePhaseAsync()
+    {
+        if (!_selectedTemplateId.HasValue)
+        {
+            return;
+        }
+
+        _savingPhase = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var saved = await WorkflowAdminAppService.SavePhaseAsync(_phaseForm.Id, new CreateUpdateProcessPhaseDto
+            {
+                TemplateId = _selectedTemplateId.Value,
+                Code = _phaseForm.Code ?? string.Empty,
+                Name = _phaseForm.Name ?? string.Empty,
+                PhaseOrder = _phaseForm.PhaseOrder,
+                IsTerminal = _phaseForm.IsTerminal,
+                StartRule = _phaseForm.StartRule,
+                EndRule = _phaseForm.EndRule
+            });
+
+            _successMessage = "Fase salvata correttamente.";
+            NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, saved.PhaseId));
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _savingPhase = false;
+        }
+    }
+
+    private async Task DeletePhaseAsync()
+    {
+        if (!_phaseForm.Id.HasValue)
+        {
+            return;
+        }
+
+        _savingPhase = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.DeletePhaseAsync(_phaseForm.Id.Value);
+            _successMessage = "Fase eliminata correttamente.";
+            NavigationManager.NavigateTo(BuildUrl(_selectedTemplateId, null));
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _savingPhase = false;
+        }
+    }
+
+    private void EditPhase(WorkflowPhaseLookupDto item)
+    {
+        _phaseForm = new PhaseFormModel
+        {
+            Id = item.PhaseId,
+            Code = item.PhaseCode,
+            Name = item.PhaseName,
+            PhaseOrder = item.PhaseOrder,
+            IsTerminal = item.IsTerminal
+        };
+    }
+
+    private void ResetPhaseForm()
+    {
+        var nextOrder = _data?.Phases.Count > 0 ? _data.Phases.Max(x => x.PhaseOrder) + 1 : 1;
+        _phaseForm = new PhaseFormModel
+        {
+            PhaseOrder = nextOrder
+        };
+    }
+
+    private async Task SaveTransitionAsync()
+    {
+        if (!_selectedTemplateId.HasValue)
+        {
+            return;
+        }
+
+        _savingTransition = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.SaveTransitionAsync(_transitionForm.Id, new CreateUpdatePhaseTransitionDto
+            {
+                TemplateId = _selectedTemplateId.Value,
+                FromPhaseId = _transitionForm.FromPhaseId!.Value,
+                ToPhaseId = _transitionForm.ToPhaseId!.Value,
+                ConditionExpr = _transitionForm.ConditionExpr
+            });
+
+            _successMessage = "Transizione salvata correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _savingTransition = false;
+        }
+    }
+
+    private async Task DeleteTransitionAsync()
+    {
+        if (!_transitionForm.Id.HasValue)
+        {
+            return;
+        }
+
+        _savingTransition = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await WorkflowAdminAppService.DeleteTransitionAsync(_transitionForm.Id.Value);
+            _successMessage = "Transizione eliminata correttamente.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _savingTransition = false;
+        }
+    }
+
+    private void EditTransition(WorkflowTransitionAdminDto item)
+    {
+        _transitionForm = new TransitionFormModel
+        {
+            Id = item.Id,
+            FromPhaseId = item.FromPhaseId,
+            ToPhaseId = item.ToPhaseId,
+            ConditionExpr = item.ConditionExpr
+        };
+    }
+
+    private void ResetTransitionForm()
+    {
+        _transitionForm = new TransitionFormModel();
     }
 
     private async Task SaveRolePermissionAsync()
@@ -554,7 +1095,7 @@
 
     private string BuildUrl(Guid? templateId, Guid? phaseId)
     {
-        var query = new System.Collections.Generic.Dictionary<string, string?>();
+        var query = new Dictionary<string, string?>();
 
         if (templateId.HasValue)
         {
@@ -590,6 +1131,56 @@
     }
 
     private static string YesNo(bool value) => value ? "Si" : "No";
+
+    private class TemplateFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string? Name { get; set; }
+
+        [Range(1, int.MaxValue)]
+        public int Version { get; set; } = 1;
+
+        public bool IsDefault { get; set; }
+    }
+
+    private class PhaseFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string? Code { get; set; }
+
+        [Required]
+        [StringLength(200)]
+        public string? Name { get; set; }
+
+        public int PhaseOrder { get; set; } = 1;
+        public bool IsTerminal { get; set; }
+
+        [StringLength(2000)]
+        public string? StartRule { get; set; }
+
+        [StringLength(2000)]
+        public string? EndRule { get; set; }
+    }
+
+    private class TransitionFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [Required]
+        public Guid? FromPhaseId { get; set; }
+
+        [Required]
+        public Guid? ToPhaseId { get; set; }
+
+        [StringLength(2000)]
+        public string? ConditionExpr { get; set; }
+    }
 
     private class RolePermissionFormModel
     {
