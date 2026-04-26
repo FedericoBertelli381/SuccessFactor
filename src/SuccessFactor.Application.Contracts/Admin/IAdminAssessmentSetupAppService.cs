@@ -7,5 +7,6 @@ namespace SuccessFactor.Admin;
 public interface IAdminAssessmentSetupAppService : IApplicationService
 {
     Task<AssessmentSetupAdminDto> GetAsync(Guid? cycleId = null);
+    Task<AssessmentSetupImportResultDto> ImportAsync(ImportAssessmentSetupInput input);
     Task<AssessmentSetupAdminListItemDto> GenerateAsync(GenerateAssessmentSetupInput input);
 }

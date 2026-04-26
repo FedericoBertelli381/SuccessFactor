@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using SuccessFactor.Auditing;
 using SuccessFactor.Competencies.Models;
 using SuccessFactor.Security;
 using SuccessFactor.Competencies.Assessments;
@@ -35,6 +36,7 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
     private readonly IRepository<CompetencyAssessmentItem, Guid> _assessmentItemRepository;
     private readonly IRepository<ProcessTemplate, Guid> _templateRepository;
     private readonly IRepository<ProcessPhase, Guid> _phaseRepository;
+    private readonly IBusinessAuditLogger _auditLogger;
 
     public AdminAssessmentSetupAppService(
         ICurrentUser currentUser,
@@ -47,7 +49,8 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
         IRepository<CompetencyAssessment, Guid> assessmentRepository,
         IRepository<CompetencyAssessmentItem, Guid> assessmentItemRepository,
         IRepository<ProcessTemplate, Guid> templateRepository,
-        IRepository<ProcessPhase, Guid> phaseRepository)
+        IRepository<ProcessPhase, Guid> phaseRepository,
+        IBusinessAuditLogger auditLogger)
     {
         _currentUser = currentUser;
         _asyncExecuter = asyncExecuter;
@@ -60,6 +63,7 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
         _assessmentItemRepository = assessmentItemRepository;
         _templateRepository = templateRepository;
         _phaseRepository = phaseRepository;
+        _auditLogger = auditLogger;
     }
 
     public async Task<AssessmentSetupAdminDto> GetAsync(Guid? cycleId = null)
@@ -165,7 +169,134 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
 
         var cycle = await _cycleRepository.GetAsync(input.CycleId);
         EnsureCycleEditable(cycle);
+        var generation = await GenerateInternalAsync(input);
+        await SaveCurrentUnitOfWorkAsync();
 
+        var employee = await _employeeRepository.GetAsync(generation.Assessment.EmployeeId);
+        var evaluator = await _employeeRepository.GetAsync(generation.Assessment.EvaluatorEmployeeId);
+        var savedItems = await _assessmentItemRepository.GetListAsync(x => x.AssessmentId == generation.Assessment.Id);
+
+        return MapAssessment(
+            generation.Assessment,
+            new Dictionary<Guid, Employee>
+            {
+                [employee.Id] = employee,
+                [evaluator.Id] = evaluator
+            },
+            new Dictionary<Guid, CompetencyModel> { [generation.Model.Id] = generation.Model },
+            generation.ModelItems,
+            savedItems);
+    }
+
+    public async Task<AssessmentSetupImportResultDto> ImportAsync(ImportAssessmentSetupInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input is null || input.CycleId == Guid.Empty)
+        {
+            throw new BusinessException("CycleIdRequired");
+        }
+
+        if (string.IsNullOrWhiteSpace(input.Content))
+        {
+            throw new BusinessException("AssessmentSetupImportContentRequired");
+        }
+
+        var cycle = await _cycleRepository.GetAsync(input.CycleId);
+        EnsureCycleEditable(cycle);
+
+        var participants = await _participantRepository.GetListAsync(x =>
+            x.CycleId == input.CycleId &&
+            !string.Equals(x.Status, "Excluded", StringComparison.OrdinalIgnoreCase));
+        var participantByEmployeeId = participants.ToDictionary(x => x.EmployeeId);
+        var employeeIds = participants.Select(x => x.EmployeeId).ToHashSet();
+
+        var activeEmployees = await _employeeRepository.GetListAsync(x => x.IsActive || employeeIds.Contains(x.Id));
+        var employeeByMatricola = activeEmployees
+            .Where(x => x.IsActive)
+            .ToDictionary(x => x.Matricola, StringComparer.OrdinalIgnoreCase);
+
+        var models = await _modelRepository.GetListAsync();
+        var modelById = models.ToDictionary(x => x.Id);
+        var modelByName = models
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(x => x.Count() == 1)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        var result = new AssessmentSetupImportResultDto();
+        var rows = ParseImportRows(input.Content);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validRows = new List<AssessmentSetupImportRow>();
+
+        foreach (var row in rows)
+        {
+            var message = ResolveImportRow(row, employeeByMatricola, participantByEmployeeId, modelById, modelByName);
+            var key = $"{row.EmployeeMatricola}|{row.EvaluatorMatricola}|{row.AssessmentType}|{row.ModelLookup}";
+
+            if (message is null && !seen.Add(key))
+            {
+                message = "Riga duplicata nel file.";
+            }
+
+            AddImportRowResult(result, row.RowNumber, key, message is null ? "Generate" : "Error", message);
+            if (message is null)
+            {
+                validRows.Add(row);
+            }
+        }
+
+        if (!result.Rows.Any(x => x.Status == "Error"))
+        {
+            foreach (var row in validRows)
+            {
+                try
+                {
+                    var generation = await GenerateInternalAsync(new GenerateAssessmentSetupInput
+                    {
+                        CycleId = input.CycleId,
+                        EmployeeId = row.EmployeeId!.Value,
+                        EvaluatorEmployeeId = row.EvaluatorEmployeeId!.Value,
+                        ModelId = row.ModelId!.Value,
+                        AssessmentType = row.AssessmentType,
+                        SafeRegenerateDraft = row.SafeRegenerateDraft
+                    });
+
+                    if (generation.WasRegenerated)
+                    {
+                        result.RegeneratedAssessments++;
+                    }
+                    else
+                    {
+                        result.CreatedAssessments++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddImportRowResult(result, row.RowNumber, $"{row.EmployeeMatricola}|{row.EvaluatorMatricola}|{row.AssessmentType}|{row.ModelLookup}", "Error", NormalizeImportError(ex));
+                }
+            }
+        }
+
+        result.ErrorCount = result.Rows.Count(x => x.Status == "Error");
+        result.HasErrors = result.ErrorCount > 0;
+        if (result.HasErrors)
+        {
+            return result;
+        }
+
+        await SaveCurrentUnitOfWorkAsync();
+        await _auditLogger.LogAsync("AssessmentSetupImportCompleted", nameof(CompetencyAssessment), cycle.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["CycleName"] = cycle.Name,
+            ["CreatedAssessments"] = result.CreatedAssessments,
+            ["RegeneratedAssessments"] = result.RegeneratedAssessments,
+            ["RowsCount"] = result.Rows.Count
+        });
+        return result;
+    }
+
+    private async Task<AssessmentGenerationResult> GenerateInternalAsync(GenerateAssessmentSetupInput input)
+    {
         await ValidateParticipantAsync(input);
         await ValidateEvaluatorAsync(input);
 
@@ -183,10 +314,12 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
             x.AssessmentType == input.AssessmentType);
 
         CompetencyAssessment assessment;
+        var wasRegenerated = false;
         if (assessments.Count > 0)
         {
             assessment = assessments.OrderBy(x => x.CreationTime).First();
             await SafeRegenerateDraftAsync(assessment, model, modelItems, input.SafeRegenerateDraft);
+            wasRegenerated = true;
         }
         else
         {
@@ -206,22 +339,7 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
             await InsertMissingItemsAsync(assessment.Id, modelItems, []);
         }
 
-        await SaveCurrentUnitOfWorkAsync();
-
-        var employee = await _employeeRepository.GetAsync(assessment.EmployeeId);
-        var evaluator = await _employeeRepository.GetAsync(assessment.EvaluatorEmployeeId);
-        var savedItems = await _assessmentItemRepository.GetListAsync(x => x.AssessmentId == assessment.Id);
-
-        return MapAssessment(
-            assessment,
-            new Dictionary<Guid, Employee>
-            {
-                [employee.Id] = employee,
-                [evaluator.Id] = evaluator
-            },
-            new Dictionary<Guid, CompetencyModel> { [model.Id] = model },
-            modelItems,
-            savedItems);
+        return new AssessmentGenerationResult(assessment, model, modelItems, wasRegenerated);
     }
 
     private async Task SafeRegenerateDraftAsync(
@@ -529,5 +647,173 @@ public class AdminAssessmentSetupAppService : ApplicationService, IAdminAssessme
             MissingModelItemCount = missingModelItemCount,
             CanSafeRegenerate = IsDraft(assessment)
         };
+    }
+
+    private static List<AssessmentSetupImportRow> ParseImportRows(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return [];
+        }
+
+        return content
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select((line, index) => new { Line = line.Trim(), RowNumber = index + 1 })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Line))
+            .Select(x => new { x.RowNumber, Columns = SplitImportLine(x.Line) })
+            .Where(x => !IsHeader(x.Columns, "EmployeeMatricola"))
+            .Select(x => new AssessmentSetupImportRow
+            {
+                RowNumber = x.RowNumber,
+                EmployeeMatricola = GetColumn(x.Columns, 0),
+                EvaluatorMatricola = GetColumn(x.Columns, 1),
+                AssessmentType = GetColumn(x.Columns, 2),
+                ModelLookup = GetColumn(x.Columns, 3),
+                SafeRegenerateDraft = ParseBool(x.Columns, 4)
+            })
+            .ToList();
+    }
+
+    private static string? ResolveImportRow(
+        AssessmentSetupImportRow row,
+        Dictionary<string, Employee> employeeByMatricola,
+        Dictionary<Guid, CycleParticipant> participantByEmployeeId,
+        Dictionary<Guid, CompetencyModel> modelById,
+        Dictionary<string, CompetencyModel> modelByName)
+    {
+        if (string.IsNullOrWhiteSpace(row.EmployeeMatricola))
+        {
+            return "EmployeeMatricola obbligatoria.";
+        }
+
+        if (string.IsNullOrWhiteSpace(row.AssessmentType))
+        {
+            row.AssessmentType = "Manager";
+        }
+
+        if (string.IsNullOrWhiteSpace(row.ModelLookup))
+        {
+            return "Competency model obbligatorio.";
+        }
+
+        if (!employeeByMatricola.TryGetValue(row.EmployeeMatricola.Trim(), out var employee))
+        {
+            return "Employee target non trovato o non attivo.";
+        }
+
+        if (!participantByEmployeeId.ContainsKey(employee.Id))
+        {
+            return "Il target non e un participant attivo del ciclo.";
+        }
+
+        row.EmployeeId = employee.Id;
+
+        if (string.Equals(row.AssessmentType, "Self", StringComparison.OrdinalIgnoreCase))
+        {
+            row.EvaluatorMatricola = employee.Matricola;
+            row.EvaluatorEmployeeId = employee.Id;
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(row.EvaluatorMatricola))
+            {
+                return "EvaluatorMatricola obbligatoria.";
+            }
+
+            if (!employeeByMatricola.TryGetValue(row.EvaluatorMatricola.Trim(), out var evaluator))
+            {
+                return "Evaluator non trovato o non attivo.";
+            }
+
+            row.EvaluatorEmployeeId = evaluator.Id;
+        }
+
+        if (!AllowedAssessmentTypes.Contains(row.AssessmentType, StringComparer.OrdinalIgnoreCase))
+        {
+            return "Assessment type non valido.";
+        }
+
+        row.AssessmentType = AllowedAssessmentTypes.First(x => string.Equals(x, row.AssessmentType, StringComparison.OrdinalIgnoreCase));
+
+        CompetencyModel? model = null;
+        if (Guid.TryParse(row.ModelLookup, out var modelId))
+        {
+            modelById.TryGetValue(modelId, out model);
+        }
+        else
+        {
+            modelByName.TryGetValue(row.ModelLookup.Trim(), out model);
+        }
+
+        if (model is null)
+        {
+            return "Competency model non trovato o non univoco.";
+        }
+
+        row.ModelId = model.Id;
+        return null;
+    }
+
+    private static string[] SplitImportLine(string line)
+    {
+        var separator = line.Contains(';') ? ';' : ',';
+        return line.Split(separator).Select(x => x.Trim()).ToArray();
+    }
+
+    private static bool IsHeader(string[] columns, string firstColumnName)
+        => columns.Length > 0 && string.Equals(columns[0], firstColumnName, StringComparison.OrdinalIgnoreCase);
+
+    private static string GetColumn(string[] columns, int index)
+        => columns.Length > index ? columns[index].Trim() : string.Empty;
+
+    private static bool ParseBool(string[] columns, int index)
+    {
+        var value = GetColumn(columns, index);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        return value.Equals("true", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("si", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddImportRowResult(AssessmentSetupImportResultDto result, int rowNumber, string key, string status, string? message = null)
+    {
+        result.Rows.Add(new AssessmentSetupImportRowResultDto
+        {
+            RowNumber = rowNumber,
+            Key = key,
+            Status = status,
+            Message = message
+        });
+    }
+
+    private static string NormalizeImportError(Exception ex)
+        => ex is BusinessException businessException
+            ? businessException.Code ?? businessException.Message
+            : ex.Message;
+
+    private sealed record AssessmentGenerationResult(
+        CompetencyAssessment Assessment,
+        CompetencyModel Model,
+        List<CompetencyModelItem> ModelItems,
+        bool WasRegenerated);
+
+    private class AssessmentSetupImportRow
+    {
+        public int RowNumber { get; set; }
+        public string EmployeeMatricola { get; set; } = string.Empty;
+        public string? EvaluatorMatricola { get; set; }
+        public string AssessmentType { get; set; } = "Manager";
+        public string ModelLookup { get; set; } = string.Empty;
+        public bool SafeRegenerateDraft { get; set; } = true;
+        public Guid? EmployeeId { get; set; }
+        public Guid? EvaluatorEmployeeId { get; set; }
+        public Guid? ModelId { get; set; }
     }
 }

@@ -174,6 +174,83 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Import massivo assessment setup</strong>
+                <span class="badge text-bg-light">no partial save</span>
+            </div>
+            <div class="card-body">
+                @if (!_data.SelectedCycleId.HasValue)
+                {
+                    <div class="text-muted">Seleziona prima un ciclo.</div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        Formato: <code>EmployeeMatricola;EvaluatorMatricola;AssessmentType;CompetencyModel;SafeRegenerateDraft</code>.
+                        <br />
+                        <span>Per <code>Self</code>, l'evaluator viene forzato sul target anche se lasci vuota la colonna.</span>
+                    </div>
+
+                    <textarea class="form-control"
+                              rows="6"
+                              @bind="_importContent"
+                              placeholder="EMP001;MGR001;Manager;Leadership Model;true"
+                              disabled="@(!CanEditSelectedCycle())"></textarea>
+
+                    <button class="btn btn-primary mt-3"
+                            @onclick="ImportAsync"
+                            disabled="@(_importing || !CanEditSelectedCycle() || string.IsNullOrWhiteSpace(_importContent))">
+                        @if (_importing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Importa assessment setup
+                    </button>
+
+                    @if (_importResult is not null)
+                    {
+                        <div class="mt-4">
+                            <div class="@(_importResult.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                                @if (_importResult.HasErrors)
+                                {
+                                    <span>Import bloccato: correggi gli errori e riprova. Nessun assessment e stato salvato.</span>
+                                }
+                                else
+                                {
+                                    <span>Import completato. Assessments @_importResult.CreatedAssessments/@_importResult.RegeneratedAssessments.</span>
+                                }
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Riga</th>
+                                            <th>Chiave</th>
+                                            <th>Status</th>
+                                            <th>Messaggio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _importResult.Rows)
+                                        {
+                                            <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                                <td>@row.RowNumber</td>
+                                                <td>@row.Key</td>
+                                                <td>@row.Status</td>
+                                                <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-white">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
@@ -270,14 +347,17 @@
 
     private bool _loading;
     private bool _saving;
+    private bool _importing;
     private string? _error;
     private string? _successMessage;
     private Guid? _selectedCycleId;
     private AssessmentSetupAdminDto? _data;
+    private AssessmentSetupImportResultDto? _importResult;
     private AssessmentSetupFormModel _form = new();
     private string? _search;
     private string? _typeFilter;
     private string? _statusFilter;
+    private string? _importContent;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -366,6 +446,42 @@
         finally
         {
             _saving = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_data?.SelectedCycleId is null)
+        {
+            return;
+        }
+
+        _importing = true;
+        _error = null;
+        _successMessage = null;
+        _importResult = null;
+
+        try
+        {
+            _importResult = await AdminAssessmentSetupAppService.ImportAsync(new ImportAssessmentSetupInput
+            {
+                CycleId = _data.SelectedCycleId.Value,
+                Content = _importContent
+            });
+
+            if (!_importResult.HasErrors)
+            {
+                _successMessage = "Import assessment setup completato correttamente.";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = GetFriendlyErrorMessage(ex);
+        }
+        finally
+        {
+            _importing = false;
         }
     }
 
