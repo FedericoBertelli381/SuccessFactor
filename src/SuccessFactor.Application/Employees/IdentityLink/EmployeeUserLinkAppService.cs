@@ -18,15 +18,21 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 {
     private readonly IRepository<Employee, Guid> _employeeRepo;
     private readonly IRepository<IdentityUser, Guid> _userRepo;
+    private readonly IRepository<IdentityRole, Guid> _roleRepo;
+    private readonly IdentityUserManager _identityUserManager;
     private readonly IBusinessAuditLogger _auditLogger;
 
     public EmployeeUserLinkAppService(
         IRepository<Employee, Guid> employeeRepo,
         IRepository<IdentityUser, Guid> userRepo,
+        IRepository<IdentityRole, Guid> roleRepo,
+        IdentityUserManager identityUserManager,
         IBusinessAuditLogger auditLogger)
     {
         _employeeRepo = employeeRepo;
         _userRepo = userRepo;
+        _roleRepo = roleRepo;
+        _identityUserManager = identityUserManager;
         _auditLogger = auditLogger;
     }
 
@@ -134,6 +140,7 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
 
         var userQuery = await _userRepo.GetQueryableAsync();
         var users = await AsyncExecuter.ToListAsync(userQuery);
+        var userById = users.ToDictionary(x => x.Id);
         var usersByUserName = users
             .Where(x => !string.IsNullOrWhiteSpace(x.UserName))
             .GroupBy(x => x.UserName!, StringComparer.OrdinalIgnoreCase)
@@ -243,6 +250,159 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
             ["RelinkedCount"] = result.RelinkedCount,
             ["RowsCount"] = result.Rows.Count,
             ["UpdateExistingLinks"] = input.UpdateExistingLinks
+        });
+
+        return result;
+    }
+
+    public async Task<UserRoleImportResultDto> ImportRolesAsync(ImportUserRolesInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input is null || string.IsNullOrWhiteSpace(input.Content))
+        {
+            throw new BusinessException("UserRoleImportContentRequired");
+        }
+
+        var allowedRoles = new[]
+        {
+            SuccessFactorRoles.Admin,
+            SuccessFactorRoles.Hr,
+            SuccessFactorRoles.Manager,
+            SuccessFactorRoles.Employee
+        };
+
+        var userQuery = await _userRepo.GetQueryableAsync();
+        var users = await AsyncExecuter.ToListAsync(userQuery);
+        var userById = users.ToDictionary(x => x.Id);
+        var usersByUserName = users
+            .Where(x => !string.IsNullOrWhiteSpace(x.UserName))
+            .GroupBy(x => x.UserName!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
+        var usersByEmail = users
+            .Where(x => !string.IsNullOrWhiteSpace(x.Email))
+            .GroupBy(x => x.Email!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        var employeeQuery = await _employeeRepo.GetQueryableAsync();
+        var employees = await AsyncExecuter.ToListAsync(employeeQuery);
+        var employeeByMatricola = employees.ToDictionary(x => x.Matricola, StringComparer.OrdinalIgnoreCase);
+
+        var roleQuery = await _roleRepo.GetQueryableAsync();
+        var existingRoles = await AsyncExecuter.ToListAsync(roleQuery);
+        var existingRoleNames = new HashSet<string>(existingRoles.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x))!, StringComparer.OrdinalIgnoreCase);
+
+        var parsedRows = ParseRoleImportRows(input.Content);
+        var result = new UserRoleImportResultDto();
+        var validRows = new List<ResolvedRoleImportRow>();
+        var seenUserIds = new HashSet<Guid>();
+
+        foreach (var row in parsedRows)
+        {
+            var validationMessage = ValidateRoleImportRow(
+                row,
+                usersByUserName,
+                usersByEmail,
+                employeeByMatricola,
+                userById,
+                allowedRoles,
+                existingRoleNames,
+                seenUserIds,
+                out var resolvedUser,
+                out var resolvedRoles,
+                out var resolvedMode);
+
+            if (!string.IsNullOrWhiteSpace(validationMessage))
+            {
+                result.Rows.Add(new UserRoleImportRowResultDto
+                {
+                    RowNumber = row.RowNumber,
+                    UserName = row.UserName,
+                    Email = row.Email,
+                    Matricola = row.Matricola,
+                    Roles = row.RolesRaw,
+                    Mode = row.Mode,
+                    Status = "Error",
+                    Message = validationMessage
+                });
+                continue;
+            }
+
+            seenUserIds.Add(resolvedUser!.Id);
+            validRows.Add(new ResolvedRoleImportRow
+            {
+                RowNumber = row.RowNumber,
+                User = resolvedUser,
+                Roles = resolvedRoles!,
+                Mode = resolvedMode
+            });
+
+            result.Rows.Add(new UserRoleImportRowResultDto
+            {
+                RowNumber = row.RowNumber,
+                UserName = resolvedUser.UserName,
+                Email = resolvedUser.Email,
+                Matricola = row.Matricola,
+                Roles = string.Join(", ", resolvedRoles!),
+                Mode = resolvedMode,
+                Status = "Ready"
+            });
+        }
+
+        result.ErrorCount = result.Rows.Count(x => x.Status == "Error");
+        result.HasErrors = result.ErrorCount > 0;
+
+        if (result.HasErrors)
+        {
+            return result;
+        }
+
+        foreach (var row in validRows)
+        {
+            var currentRoles = (await _identityUserManager.GetRolesAsync(row.User))
+                .Where(x => SuccessFactorRoles.Normalize(x) is not null)
+                .Select(x => SuccessFactorRoles.Normalize(x)!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var targetRoles = row.Roles
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var rolesToAdd = new List<string>();
+            var rolesToRemove = new List<string>();
+
+            if (row.Mode == "Replace")
+            {
+                rolesToRemove.AddRange(currentRoles.Except(targetRoles, StringComparer.OrdinalIgnoreCase));
+            }
+
+            rolesToAdd.AddRange(targetRoles.Except(currentRoles, StringComparer.OrdinalIgnoreCase));
+
+            if (rolesToRemove.Count > 0)
+            {
+                var removeResult = await _identityUserManager.RemoveFromRolesAsync(row.User, rolesToRemove);
+                EnsureIdentityResultSucceeded(removeResult);
+                result.RemovedAssignmentsCount += rolesToRemove.Count;
+            }
+
+            if (rolesToAdd.Count > 0)
+            {
+                var addResult = await _identityUserManager.AddToRolesAsync(row.User, rolesToAdd);
+                EnsureIdentityResultSucceeded(addResult);
+                result.AddedAssignmentsCount += rolesToAdd.Count;
+            }
+
+            result.ProcessedCount++;
+        }
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync("UserRoleImportCompleted", "UserRoleImport", null, new Dictionary<string, object?>
+        {
+            ["ProcessedCount"] = result.ProcessedCount,
+            ["AddedAssignmentsCount"] = result.AddedAssignmentsCount,
+            ["RemovedAssignmentsCount"] = result.RemovedAssignmentsCount,
+            ["RowsCount"] = result.Rows.Count
         });
 
         return result;
@@ -499,6 +659,18 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
     private static List<IdentityUser> LookupUsers(Dictionary<string, List<IdentityUser>> index, string key)
         => index.TryGetValue(key, out var users) ? users : [];
 
+    private static void EnsureIdentityResultSucceeded(Microsoft.AspNetCore.Identity.IdentityResult result)
+    {
+        if (result.Succeeded)
+        {
+            return;
+        }
+
+        var message = string.Join("; ", result.Errors.Select(x => x.Description));
+        throw new BusinessException("IdentityRoleUpdateFailed")
+            .WithData("Reason", message);
+    }
+
     private static string NormalizeMatchMode(string? value)
     {
         var normalized = NormalizeOptionalImportValue(value);
@@ -562,5 +734,187 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
         public Employee Employee { get; set; } = default!;
         public IdentityUser User { get; set; } = default!;
         public bool IsRelink { get; set; }
+    }
+
+    private static List<RoleImportRow> ParseRoleImportRows(string content)
+    {
+        var result = new List<RoleImportRow>();
+        var lines = content
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select((line, index) => new { Line = line.Trim(), RowNumber = index + 1 })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Line))
+            .ToList();
+
+        foreach (var line in lines)
+        {
+            var columns = SplitImportLine(line.Line);
+            if (columns.Length > 0 && string.Equals(columns[0], "UserName", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            result.Add(new RoleImportRow
+            {
+                RowNumber = line.RowNumber,
+                UserName = NormalizeOptionalImportValue(GetColumn(columns, 0)),
+                Email = NormalizeOptionalImportValue(GetColumn(columns, 1)),
+                Matricola = NormalizeOptionalImportValue(GetColumn(columns, 2)),
+                RolesRaw = GetColumn(columns, 3),
+                Mode = NormalizeRoleImportMode(GetColumn(columns, 4))
+            });
+        }
+
+        return result;
+    }
+
+    private static string? ValidateRoleImportRow(
+        RoleImportRow row,
+        Dictionary<string, List<IdentityUser>> usersByUserName,
+        Dictionary<string, List<IdentityUser>> usersByEmail,
+        Dictionary<string, Employee> employeeByMatricola,
+        Dictionary<Guid, IdentityUser> userById,
+        string[] allowedRoles,
+        HashSet<string> existingRoleNames,
+        HashSet<Guid> seenUserIds,
+        out IdentityUser? user,
+        out List<string>? roles,
+        out string mode)
+    {
+        user = null;
+        roles = null;
+        mode = row.Mode;
+
+        var roleTokens = SplitRoles(row.RolesRaw)
+            .Select(SuccessFactorRoles.Normalize)
+            .ToList();
+
+        if (roleTokens.Count == 0)
+        {
+            return "Almeno un ruolo applicativo e obbligatorio.";
+        }
+
+        if (roleTokens.Any(x => x is null))
+        {
+            return "Uno o piu ruoli non sono riconosciuti.";
+        }
+
+        roles = roleTokens!
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var unsupported = roles.Except(allowedRoles, StringComparer.OrdinalIgnoreCase).ToList();
+        if (unsupported.Count > 0)
+        {
+            return $"Ruoli non supportati: {string.Join(", ", unsupported)}.";
+        }
+
+        var missingInDb = roles.Where(x => !existingRoleNames.Contains(x)).ToList();
+        if (missingInDb.Count > 0)
+        {
+            return $"Ruoli non presenti nel tenant: {string.Join(", ", missingInDb)}.";
+        }
+
+        var candidates = new List<IdentityUser>();
+
+        if (!string.IsNullOrWhiteSpace(row.UserName))
+        {
+            candidates.AddRange(LookupUsers(usersByUserName, row.UserName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.Email))
+        {
+            candidates.AddRange(LookupUsers(usersByEmail, row.Email));
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.Matricola))
+        {
+            if (!employeeByMatricola.TryGetValue(row.Matricola, out var employee))
+            {
+                return "Matricola non trovata.";
+            }
+
+            if (!employee.UserId.HasValue)
+            {
+                return "La matricola indicata non ha un utente collegato.";
+            }
+
+            if (!userById.TryGetValue(employee.UserId.Value, out var linkedUser))
+            {
+                return "Utente collegato alla matricola non trovato.";
+            }
+
+            candidates.Add(linkedUser);
+        }
+
+        var distinctCandidates = candidates
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .ToList();
+
+        if (distinctCandidates.Count == 0)
+        {
+            return "Nessun utente trovato con i riferimenti indicati.";
+        }
+
+        if (distinctCandidates.Count > 1)
+        {
+            return "Identificazione utente ambigua.";
+        }
+
+        user = distinctCandidates[0];
+
+        if (seenUserIds.Contains(user.Id))
+        {
+            return "Lo stesso utente compare piu volte nel file.";
+        }
+
+        return null;
+    }
+
+    private static string NormalizeRoleImportMode(string? value)
+    {
+        var normalized = NormalizeOptionalImportValue(value);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return "Add";
+        }
+
+        return normalized.Equals("Replace", StringComparison.OrdinalIgnoreCase)
+            ? "Replace"
+            : "Add";
+    }
+
+    private static List<string> SplitRoles(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return value
+            .Split(['|', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+    }
+
+    private sealed class RoleImportRow
+    {
+        public int RowNumber { get; set; }
+        public string? UserName { get; set; }
+        public string? Email { get; set; }
+        public string? Matricola { get; set; }
+        public string RolesRaw { get; set; } = string.Empty;
+        public string Mode { get; set; } = "Add";
+    }
+
+    private sealed class ResolvedRoleImportRow
+    {
+        public int RowNumber { get; set; }
+        public IdentityUser User { get; set; } = default!;
+        public List<string> Roles { get; set; } = [];
+        public string Mode { get; set; } = "Add";
     }
 }

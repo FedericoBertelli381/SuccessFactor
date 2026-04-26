@@ -245,6 +245,92 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Import massivo ruoli applicativi</strong>
+                <span class="badge text-bg-light">Add / Replace</span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    Formato: <code>UserName;Email;Matricola;Roles;Mode</code>.
+                    <br />
+                    <span><code>Roles</code> supportati: <code>admin</code>, <code>HR</code>, <code>Responsabile</code>, <code>Dipendente</code>. Separatore ruoli: <code>|</code> oppure <code>,</code>.</span>
+                    <br />
+                    <span><code>Mode</code>: <code>Add</code> aggiunge i ruoli mancanti; <code>Replace</code> sostituisce solo i ruoli applicativi SuccessFactor mantenendo eventuali altri ruoli tecnici fuori perimetro.</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">CSV</label>
+                    <textarea class="form-control"
+                              rows="6"
+                              @bind="_roleImportContent"
+                              placeholder="UserName;Email;Matricola;Roles;Mode"></textarea>
+                </div>
+
+                <button class="btn btn-primary"
+                        @onclick="ImportRolesAsync"
+                        disabled="@(_roleImporting || string.IsNullOrWhiteSpace(_roleImportContent))">
+                    @if (_roleImporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Importa ruoli applicativi
+                </button>
+
+                @if (_roleImportResult is not null)
+                {
+                    <div class="mt-4">
+                        <div class="@(_roleImportResult.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                            @if (_roleImportResult.HasErrors)
+                            {
+                                <span>Import ruoli bloccato: correggi gli errori e riprova. Nessun ruolo e stato aggiornato.</span>
+                            }
+                            else
+                            {
+                                <span>
+                                    Import ruoli completato. Utenti processati: @_roleImportResult.ProcessedCount,
+                                    assegnazioni aggiunte: @_roleImportResult.AddedAssignmentsCount,
+                                    assegnazioni rimosse: @_roleImportResult.RemovedAssignmentsCount.
+                                </span>
+                            }
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Riga</th>
+                                        <th>UserName</th>
+                                        <th>Email</th>
+                                        <th>Matricola</th>
+                                        <th>Roles</th>
+                                        <th>Mode</th>
+                                        <th>Status</th>
+                                        <th>Messaggio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _roleImportResult.Rows)
+                                    {
+                                        <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                            <td>@row.RowNumber</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.UserName) ? "-" : row.UserName)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Email) ? "-" : row.Email)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Matricola) ? "-" : row.Matricola)</td>
+                                            <td>@row.Roles</td>
+                                            <td>@row.Mode</td>
+                                            <td>@row.Status</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <strong>Employee gia collegati</strong>
@@ -304,11 +390,14 @@
     private string? _successMessage;
     private string? _userSearch;
     private string? _importContent;
+    private string? _roleImportContent;
     private Guid? _selectedEmployeeId;
     private Guid? _selectedUserId;
     private bool _importing;
+    private bool _roleImporting;
     private bool _importUpdateExistingLinks;
     private EmployeeUserLinkImportResultDto? _importResult;
+    private UserRoleImportResultDto? _roleImportResult;
     private List<UnlinkedEmployeeDto> _unlinkedEmployees = [];
     private List<LinkedEmployeeDto> _linkedEmployees = [];
     private List<IdentityUserLookupDto> _userResults = [];
@@ -450,6 +539,35 @@
         finally
         {
             _importing = false;
+        }
+    }
+
+    private async Task ImportRolesAsync()
+    {
+        _roleImporting = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            _roleImportResult = await EmployeeUserLinkAppService.ImportRolesAsync(new ImportUserRolesInput
+            {
+                Content = _roleImportContent ?? string.Empty
+            });
+
+            if (!_roleImportResult.HasErrors)
+            {
+                _successMessage =
+                    $"Import ruoli completato. Utenti processati: {_roleImportResult.ProcessedCount}, assegnazioni aggiunte: {_roleImportResult.AddedAssignmentsCount}, assegnazioni rimosse: {_roleImportResult.RemovedAssignmentsCount}.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _roleImporting = false;
         }
     }
 

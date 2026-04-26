@@ -10,6 +10,7 @@ public interface IEmployeeUserLinkAppService : IApplicationService
     Task<UnlinkedEmployeeDto[]> GetUnlinkedEmployeesAsync(int maxResultCount = 50);
     Task<LinkedEmployeeDto[]> GetLinkedEmployeesAsync(int maxResultCount = 100);
     Task<EmployeeUserLinkImportResultDto> ImportAsync(ImportEmployeeUserLinksInput input);
+    Task<UserRoleImportResultDto> ImportRolesAsync(ImportUserRolesInput input);
     Task LinkAsync(LinkEmployeeUserDto input);
     Task UnlinkAsync(Guid employeeId);
     Task<bool> LinkByEmailAsync(Guid employeeId);
