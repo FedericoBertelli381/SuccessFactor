@@ -9,6 +9,7 @@ namespace SuccessFactor.Admin;
 public interface IWorkflowAdminAppService : IApplicationService
 {
     Task<WorkflowAdminDto> GetAsync(GetWorkflowAdminInput input);
+    Task<WorkflowImportResultDto> ImportAsync(ImportWorkflowSetupInput input);
     Task<WorkflowTemplateLookupDto> SaveTemplateAsync(Guid? id, CreateUpdateProcessTemplateDto input);
     Task DeleteTemplateAsync(Guid id);
     Task<WorkflowPhaseLookupDto> SavePhaseAsync(Guid? id, CreateUpdateProcessPhaseDto input);

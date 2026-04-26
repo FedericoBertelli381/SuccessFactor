@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -130,6 +131,467 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             .ToList();
 
         return dto;
+    }
+
+    public async Task<WorkflowImportResultDto> ImportAsync(ImportWorkflowSetupInput input)
+    {
+        EnsureTenantAndAdmin();
+        input ??= new ImportWorkflowSetupInput();
+
+        var result = new WorkflowImportResultDto();
+
+        var templateRows = ParseTemplates(input.TemplatesContent, result);
+        var phaseRows = ParsePhases(input.PhasesContent, result);
+        var transitionRows = ParseTransitions(input.TransitionsContent, result);
+        var rolePermissionRows = ParseRolePermissions(input.RolePermissionsContent, result);
+        var fieldPolicyRows = ParseFieldPolicies(input.FieldPoliciesContent, result);
+
+        if (!templateRows.Any() &&
+            !phaseRows.Any() &&
+            !transitionRows.Any() &&
+            !rolePermissionRows.Any() &&
+            !fieldPolicyRows.Any())
+        {
+            AddError(result, "WorkflowImport", 0, "-", "Nessun contenuto da importare.");
+            return result;
+        }
+
+        var importedDefaultTemplates = templateRows.Where(x => x.IsDefault).ToList();
+        if (importedDefaultTemplates.Count > 1)
+        {
+            foreach (var row in importedDefaultTemplates)
+            {
+                AddError(result, WorkflowImportSections.Templates, row.RowNumber, row.Key, "Solo un template puo essere marcato come default nello stesso import.");
+            }
+        }
+
+        var templates = await _templateRepository.GetListAsync();
+        var phases = await _phaseRepository.GetListAsync();
+        var transitions = await _transitionRepository.GetListAsync();
+        var rolePermissions = await _rolePermissionRepository.GetListAsync();
+        var fieldPolicies = await _fieldPolicyRepository.GetListAsync();
+        var templateById = templates.ToDictionary(x => x.Id);
+        var phaseById = phases.ToDictionary(x => x.Id);
+
+        var existingTemplateByKey = templates.ToDictionary(
+            x => new TemplateKey(x.Name, x.Version),
+            x => x);
+
+        var existingPhaseByKey = phases
+            .Join(templates,
+                phase => phase.TemplateId,
+                template => template.Id,
+                (phase, template) => new { phase, template })
+            .ToDictionary(
+                x => new PhaseKey(new TemplateKey(x.template.Name, x.template.Version), x.phase.Code),
+                x => x.phase);
+
+        var existingTransitionByKey = transitions
+            .Join(templates, transition => transition.TemplateId, template => template.Id, (transition, template) => new { transition, template })
+            .ToDictionary(
+                x =>
+                {
+                    var fromPhase = phaseById[x.transition.FromPhaseId];
+                    var toPhase = phaseById[x.transition.ToPhaseId];
+                    return new TransitionKey(new TemplateKey(x.template.Name, x.template.Version), fromPhase.Code, toPhase.Code);
+                },
+                x => x.transition);
+
+        var existingRolePermissionByKey = rolePermissions
+            .Join(phases, permission => permission.PhaseId, phase => phase.Id, (permission, phase) => new { permission, phase })
+            .Join(templates, item => item.permission.TemplateId, template => template.Id, (item, template) => new { item.permission, item.phase, template })
+            .ToDictionary(
+                x => new RolePermissionKey(new TemplateKey(x.template.Name, x.template.Version), x.phase.Code, x.permission.RoleCode),
+                x => x.permission);
+
+        var existingFieldPolicyByKey = fieldPolicies
+            .Join(phases, policy => policy.PhaseId, phase => phase.Id, (policy, phase) => new { policy, phase })
+            .Join(templates, item => item.policy.TemplateId, template => template.Id, (item, template) => new { item.policy, item.phase, template })
+            .ToDictionary(
+                x => new FieldPolicyKey(new TemplateKey(x.template.Name, x.template.Version), x.phase.Code, x.policy.FieldKey, x.policy.RoleCode),
+                x => x.policy);
+
+        var knownTemplateKeys = new HashSet<TemplateKey>(existingTemplateByKey.Keys);
+        var knownPhaseKeys = new HashSet<PhaseKey>(existingPhaseByKey.Keys);
+        var seenTemplateRows = new HashSet<TemplateKey>();
+        var seenPhaseRows = new HashSet<PhaseKey>();
+        var seenTransitionRows = new HashSet<TransitionKey>();
+        var seenRolePermissionRows = new HashSet<RolePermissionKey>();
+        var seenFieldPolicyRows = new HashSet<FieldPolicyKey>();
+
+        var templateCreates = new List<TemplateImportRow>();
+        var phaseCreates = new List<PhaseImportRow>();
+        var transitionCreates = new List<TransitionImportRow>();
+        var rolePermissionCreates = new List<RolePermissionImportRow>();
+        var fieldPolicyCreates = new List<FieldPolicyImportRow>();
+
+        var templateUpdates = new List<(TemplateImportRow Row, ProcessTemplate Entity)>();
+        var phaseUpdates = new List<(PhaseImportRow Row, ProcessPhase Entity)>();
+        var transitionUpdates = new List<(TransitionImportRow Row, PhaseTransition Entity)>();
+        var rolePermissionUpdates = new List<(RolePermissionImportRow Row, PhaseRolePermission Entity)>();
+        var fieldPolicyUpdates = new List<(FieldPolicyImportRow Row, PhaseFieldPolicy Entity)>();
+
+        foreach (var row in templateRows)
+        {
+            if (!seenTemplateRows.Add(row.TemplateKey))
+            {
+                AddError(result, WorkflowImportSections.Templates, row.RowNumber, row.Key, "Template duplicato nello stesso file.");
+                continue;
+            }
+
+            if (existingTemplateByKey.TryGetValue(row.TemplateKey, out var existingTemplate))
+            {
+                if (!input.UpdateExisting)
+                {
+                    AddError(result, WorkflowImportSections.Templates, row.RowNumber, row.Key, "Template gia esistente. Abilita aggiorna esistenti per modificarlo.");
+                    continue;
+                }
+
+                templateUpdates.Add((row, existingTemplate));
+                AddPreview(result, WorkflowImportSections.Templates, row.RowNumber, row.Key, "Update");
+            }
+            else
+            {
+                templateCreates.Add(row);
+                knownTemplateKeys.Add(row.TemplateKey);
+                AddPreview(result, WorkflowImportSections.Templates, row.RowNumber, row.Key, "Create");
+            }
+        }
+
+        foreach (var row in phaseRows)
+        {
+            if (!knownTemplateKeys.Contains(row.TemplateKey))
+            {
+                AddError(result, WorkflowImportSections.Phases, row.RowNumber, row.Key, "Template non trovato ne nell'import ne tra quelli esistenti.");
+                continue;
+            }
+
+            if (!seenPhaseRows.Add(row.PhaseKey))
+            {
+                AddError(result, WorkflowImportSections.Phases, row.RowNumber, row.Key, "Fase duplicata nello stesso file.");
+                continue;
+            }
+
+            if (existingPhaseByKey.TryGetValue(row.PhaseKey, out var existingPhase))
+            {
+                if (!input.UpdateExisting)
+                {
+                    AddError(result, WorkflowImportSections.Phases, row.RowNumber, row.Key, "Fase gia esistente. Abilita aggiorna esistenti per modificarla.");
+                    continue;
+                }
+
+                phaseUpdates.Add((row, existingPhase));
+                AddPreview(result, WorkflowImportSections.Phases, row.RowNumber, row.Key, "Update");
+            }
+            else
+            {
+                phaseCreates.Add(row);
+                knownPhaseKeys.Add(row.PhaseKey);
+                AddPreview(result, WorkflowImportSections.Phases, row.RowNumber, row.Key, "Create");
+            }
+        }
+
+        foreach (var row in transitionRows)
+        {
+            if (!knownPhaseKeys.Contains(new PhaseKey(row.TemplateKey, row.FromPhaseCode)))
+            {
+                AddError(result, WorkflowImportSections.Transitions, row.RowNumber, row.Key, "Fase origine non trovata.");
+                continue;
+            }
+
+            if (!knownPhaseKeys.Contains(new PhaseKey(row.TemplateKey, row.ToPhaseCode)))
+            {
+                AddError(result, WorkflowImportSections.Transitions, row.RowNumber, row.Key, "Fase destinazione non trovata.");
+                continue;
+            }
+
+            if (!seenTransitionRows.Add(row.TransitionKey))
+            {
+                AddError(result, WorkflowImportSections.Transitions, row.RowNumber, row.Key, "Transizione duplicata nello stesso file.");
+                continue;
+            }
+
+            if (existingTransitionByKey.TryGetValue(row.TransitionKey, out var existingTransition))
+            {
+                if (!input.UpdateExisting)
+                {
+                    AddError(result, WorkflowImportSections.Transitions, row.RowNumber, row.Key, "Transizione gia esistente. Abilita aggiorna esistenti per modificarla.");
+                    continue;
+                }
+
+                transitionUpdates.Add((row, existingTransition));
+                AddPreview(result, WorkflowImportSections.Transitions, row.RowNumber, row.Key, "Update");
+            }
+            else
+            {
+                transitionCreates.Add(row);
+                AddPreview(result, WorkflowImportSections.Transitions, row.RowNumber, row.Key, "Create");
+            }
+        }
+
+        foreach (var row in rolePermissionRows)
+        {
+            if (!knownPhaseKeys.Contains(new PhaseKey(row.TemplateKey, row.PhaseCode)))
+            {
+                AddError(result, WorkflowImportSections.RolePermissions, row.RowNumber, row.Key, "Fase non trovata.");
+                continue;
+            }
+
+            if (!seenRolePermissionRows.Add(row.PermissionKey))
+            {
+                AddError(result, WorkflowImportSections.RolePermissions, row.RowNumber, row.Key, "Role permission duplicata nello stesso file.");
+                continue;
+            }
+
+            if (existingRolePermissionByKey.TryGetValue(row.PermissionKey, out var existingPermission))
+            {
+                if (!input.UpdateExisting)
+                {
+                    AddError(result, WorkflowImportSections.RolePermissions, row.RowNumber, row.Key, "Role permission gia esistente. Abilita aggiorna esistenti per modificarla.");
+                    continue;
+                }
+
+                rolePermissionUpdates.Add((row, existingPermission));
+                AddPreview(result, WorkflowImportSections.RolePermissions, row.RowNumber, row.Key, "Update");
+            }
+            else
+            {
+                rolePermissionCreates.Add(row);
+                AddPreview(result, WorkflowImportSections.RolePermissions, row.RowNumber, row.Key, "Create");
+            }
+        }
+
+        foreach (var row in fieldPolicyRows)
+        {
+            if (!knownPhaseKeys.Contains(new PhaseKey(row.TemplateKey, row.PhaseCode)))
+            {
+                AddError(result, WorkflowImportSections.FieldPolicies, row.RowNumber, row.Key, "Fase non trovata.");
+                continue;
+            }
+
+            if (!seenFieldPolicyRows.Add(row.PolicyKey))
+            {
+                AddError(result, WorkflowImportSections.FieldPolicies, row.RowNumber, row.Key, "Field policy duplicata nello stesso file.");
+                continue;
+            }
+
+            if (existingFieldPolicyByKey.TryGetValue(row.PolicyKey, out var existingPolicy))
+            {
+                if (!input.UpdateExisting)
+                {
+                    AddError(result, WorkflowImportSections.FieldPolicies, row.RowNumber, row.Key, "Field policy gia esistente. Abilita aggiorna esistenti per modificarla.");
+                    continue;
+                }
+
+                fieldPolicyUpdates.Add((row, existingPolicy));
+                AddPreview(result, WorkflowImportSections.FieldPolicies, row.RowNumber, row.Key, "Update");
+            }
+            else
+            {
+                fieldPolicyCreates.Add(row);
+                AddPreview(result, WorkflowImportSections.FieldPolicies, row.RowNumber, row.Key, "Create");
+            }
+        }
+
+        if (result.HasErrors)
+        {
+            result.ErrorCount = result.Rows.Count(x => x.Status == "Error");
+            return result;
+        }
+
+        var createdTemplatesByKey = new Dictionary<TemplateKey, ProcessTemplate>();
+        foreach (var row in templateCreates)
+        {
+            var entity = await _templateRepository.InsertAsync(new ProcessTemplate
+            {
+                TenantId = CurrentTenant.Id,
+                Name = row.TemplateName,
+                Version = row.Version,
+                IsDefault = row.IsDefault
+            }, autoSave: true);
+
+            createdTemplatesByKey[row.TemplateKey] = entity;
+        }
+
+        foreach (var (row, entity) in templateUpdates)
+        {
+            entity.IsDefault = row.IsDefault;
+            await _templateRepository.UpdateAsync(entity, autoSave: true);
+        }
+
+        var resolvedTemplatesByKey = new Dictionary<TemplateKey, ProcessTemplate>(existingTemplateByKey);
+        foreach (var item in createdTemplatesByKey)
+        {
+            resolvedTemplatesByKey[item.Key] = item.Value;
+        }
+
+        if (templateRows.Any(x => x.IsDefault))
+        {
+            var selectedDefault = templateRows.Single(x => x.IsDefault).TemplateKey;
+            var selectedDefaultTemplate = resolvedTemplatesByKey[selectedDefault];
+            foreach (var template in templates.Where(x => x.Id != selectedDefaultTemplate.Id && x.IsDefault))
+            {
+                template.IsDefault = false;
+                await _templateRepository.UpdateAsync(template, autoSave: true);
+            }
+
+            foreach (var template in createdTemplatesByKey.Values.Where(x => x.Id != selectedDefaultTemplate.Id))
+            {
+                if (template.IsDefault)
+                {
+                    template.IsDefault = false;
+                    await _templateRepository.UpdateAsync(template, autoSave: true);
+                }
+            }
+        }
+
+        foreach (var (row, entity) in phaseUpdates)
+        {
+            entity.Name = row.PhaseName;
+            entity.PhaseOrder = row.PhaseOrder;
+            entity.IsTerminal = row.IsTerminal;
+            entity.StartRule = row.StartRule;
+            entity.EndRule = row.EndRule;
+        }
+
+        var createdPhasesByKey = new Dictionary<PhaseKey, ProcessPhase>();
+        foreach (var row in phaseCreates)
+        {
+            var template = resolvedTemplatesByKey[row.TemplateKey];
+            var entity = await _phaseRepository.InsertAsync(new ProcessPhase
+            {
+                TemplateId = template.Id,
+                Code = row.PhaseCode,
+                Name = row.PhaseName,
+                PhaseOrder = row.PhaseOrder,
+                IsTerminal = row.IsTerminal,
+                StartRule = row.StartRule,
+                EndRule = row.EndRule
+            }, autoSave: true);
+
+            createdPhasesByKey[row.PhaseKey] = entity;
+        }
+
+        foreach (var (_, entity) in phaseUpdates)
+        {
+            await _phaseRepository.UpdateAsync(entity, autoSave: true);
+        }
+
+        var resolvedPhasesByKey = new Dictionary<PhaseKey, ProcessPhase>(existingPhaseByKey);
+        foreach (var item in createdPhasesByKey)
+        {
+            resolvedPhasesByKey[item.Key] = item.Value;
+        }
+
+        foreach (var (row, entity) in transitionUpdates)
+        {
+            entity.ConditionExpr = row.ConditionExpr;
+        }
+
+        foreach (var row in transitionCreates)
+        {
+            var template = resolvedTemplatesByKey[row.TemplateKey];
+            var fromPhase = resolvedPhasesByKey[new PhaseKey(row.TemplateKey, row.FromPhaseCode)];
+            var toPhase = resolvedPhasesByKey[new PhaseKey(row.TemplateKey, row.ToPhaseCode)];
+            await _transitionRepository.InsertAsync(new PhaseTransition
+            {
+                TemplateId = template.Id,
+                FromPhaseId = fromPhase.Id,
+                ToPhaseId = toPhase.Id,
+                ConditionExpr = row.ConditionExpr
+            }, autoSave: true);
+        }
+
+        foreach (var (_, entity) in transitionUpdates)
+        {
+            await _transitionRepository.UpdateAsync(entity, autoSave: true);
+        }
+
+        foreach (var (row, entity) in rolePermissionUpdates)
+        {
+            entity.CanView = row.CanView;
+            entity.CanEdit = row.CanEdit;
+            entity.CanSubmit = row.CanSubmit;
+            entity.CanAdvance = row.CanAdvance;
+            entity.ConditionExpr = row.ConditionExpr;
+        }
+
+        foreach (var row in rolePermissionCreates)
+        {
+            var template = resolvedTemplatesByKey[row.TemplateKey];
+            var phase = resolvedPhasesByKey[new PhaseKey(row.TemplateKey, row.PhaseCode)];
+            await _rolePermissionRepository.InsertAsync(new PhaseRolePermission
+            {
+                TemplateId = template.Id,
+                PhaseId = phase.Id,
+                RoleCode = row.RoleCode,
+                CanView = row.CanView,
+                CanEdit = row.CanEdit,
+                CanSubmit = row.CanSubmit,
+                CanAdvance = row.CanAdvance,
+                ConditionExpr = row.ConditionExpr
+            }, autoSave: true);
+        }
+
+        foreach (var (_, entity) in rolePermissionUpdates)
+        {
+            await _rolePermissionRepository.UpdateAsync(entity, autoSave: true);
+        }
+
+        foreach (var (row, entity) in fieldPolicyUpdates)
+        {
+            entity.Access = row.Access;
+            entity.IsRequired = row.IsRequired;
+            entity.ConditionExpr = row.ConditionExpr;
+        }
+
+        foreach (var row in fieldPolicyCreates)
+        {
+            var template = resolvedTemplatesByKey[row.TemplateKey];
+            var phase = resolvedPhasesByKey[new PhaseKey(row.TemplateKey, row.PhaseCode)];
+            await _fieldPolicyRepository.InsertAsync(new PhaseFieldPolicy
+            {
+                TemplateId = template.Id,
+                PhaseId = phase.Id,
+                FieldKey = row.FieldKey,
+                RoleCode = row.RoleCode,
+                Access = row.Access,
+                IsRequired = row.IsRequired,
+                ConditionExpr = row.ConditionExpr
+            }, autoSave: true);
+        }
+
+        foreach (var (_, entity) in fieldPolicyUpdates)
+        {
+            await _fieldPolicyRepository.UpdateAsync(entity, autoSave: true);
+        }
+
+        result.CreatedTemplates = templateCreates.Count;
+        result.UpdatedTemplates = templateUpdates.Count;
+        result.CreatedPhases = phaseCreates.Count;
+        result.UpdatedPhases = phaseUpdates.Count;
+        result.CreatedTransitions = transitionCreates.Count;
+        result.UpdatedTransitions = transitionUpdates.Count;
+        result.CreatedRolePermissions = rolePermissionCreates.Count;
+        result.UpdatedRolePermissions = rolePermissionUpdates.Count;
+        result.CreatedFieldPolicies = fieldPolicyCreates.Count;
+        result.UpdatedFieldPolicies = fieldPolicyUpdates.Count;
+
+        await _auditLogger.LogAsync("WorkflowImportCompleted", "WorkflowImport", "bulk", new Dictionary<string, object?>
+        {
+            ["CreatedTemplates"] = result.CreatedTemplates,
+            ["UpdatedTemplates"] = result.UpdatedTemplates,
+            ["CreatedPhases"] = result.CreatedPhases,
+            ["UpdatedPhases"] = result.UpdatedPhases,
+            ["CreatedTransitions"] = result.CreatedTransitions,
+            ["UpdatedTransitions"] = result.UpdatedTransitions,
+            ["CreatedRolePermissions"] = result.CreatedRolePermissions,
+            ["UpdatedRolePermissions"] = result.UpdatedRolePermissions,
+            ["CreatedFieldPolicies"] = result.CreatedFieldPolicies,
+            ["UpdatedFieldPolicies"] = result.UpdatedFieldPolicies
+        });
+
+        return result;
     }
 
     public async Task<WorkflowTemplateLookupDto> SaveTemplateAsync(Guid? id, CreateUpdateProcessTemplateDto input)
@@ -813,4 +1275,274 @@ public class WorkflowAdminAppService : ApplicationService, IWorkflowAdminAppServ
             throw new BusinessException("TemplateVersionInvalid");
         }
     }
+
+    private static List<TemplateImportRow> ParseTemplates(string? content, WorkflowImportResultDto result)
+        => ParseContent(content, WorkflowImportSections.Templates, 3, result, ParseTemplateRow);
+
+    private static List<PhaseImportRow> ParsePhases(string? content, WorkflowImportResultDto result)
+        => ParseContent(content, WorkflowImportSections.Phases, 8, result, ParsePhaseRow);
+
+    private static List<TransitionImportRow> ParseTransitions(string? content, WorkflowImportResultDto result)
+        => ParseContent(content, WorkflowImportSections.Transitions, 5, result, ParseTransitionRow);
+
+    private static List<RolePermissionImportRow> ParseRolePermissions(string? content, WorkflowImportResultDto result)
+        => ParseContent(content, WorkflowImportSections.RolePermissions, 9, result, ParseRolePermissionRow);
+
+    private static List<FieldPolicyImportRow> ParseFieldPolicies(string? content, WorkflowImportResultDto result)
+        => ParseContent(content, WorkflowImportSections.FieldPolicies, 8, result, ParseFieldPolicyRow);
+
+    private static List<T> ParseContent<T>(
+        string? content,
+        string section,
+        int expectedColumns,
+        WorkflowImportResultDto result,
+        Func<string[], int, T> parser)
+        where T : ImportRowBase
+    {
+        var rows = new List<T>();
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return rows;
+        }
+
+        var lines = content.Replace("\r", string.Empty).Split('\n');
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var line = lines[index].Trim();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var rowNumber = index + 1;
+            try
+            {
+                var columns = line.Split(';');
+                if (columns.Length != expectedColumns)
+                {
+                    throw new BusinessException($"Formato non valido: attese {expectedColumns} colonne separate da ';'.");
+                }
+
+                rows.Add(parser(columns, rowNumber));
+            }
+            catch (Exception ex)
+            {
+                AddError(result, section, rowNumber, line, UiErrorMessage(ex));
+            }
+        }
+
+        return rows;
+    }
+
+    private static TemplateImportRow ParseTemplateRow(string[] columns, int rowNumber)
+    {
+        var templateName = NormalizeRequired(columns[0], "TemplateName");
+        var version = ParsePositiveInt(columns[1], "Version");
+        var isDefault = ParseBoolean(columns[2], "IsDefault");
+        return new TemplateImportRow(rowNumber, templateName, version, isDefault);
+    }
+
+    private static PhaseImportRow ParsePhaseRow(string[] columns, int rowNumber)
+    {
+        var templateName = NormalizeRequired(columns[0], "TemplateName");
+        var version = ParsePositiveInt(columns[1], "Version");
+        var phaseCode = NormalizeRequired(columns[2], "PhaseCode");
+        var phaseName = NormalizeRequired(columns[3], "PhaseName");
+        var phaseOrder = ParsePositiveInt(columns[4], "PhaseOrder");
+        var isTerminal = ParseBoolean(columns[5], "IsTerminal");
+        var startRule = NormalizeNullable(columns[6]);
+        var endRule = NormalizeNullable(columns[7]);
+        return new PhaseImportRow(rowNumber, templateName, version, phaseCode, phaseName, phaseOrder, isTerminal, startRule, endRule);
+    }
+
+    private static TransitionImportRow ParseTransitionRow(string[] columns, int rowNumber)
+    {
+        var templateName = NormalizeRequired(columns[0], "TemplateName");
+        var version = ParsePositiveInt(columns[1], "Version");
+        var fromPhaseCode = NormalizeRequired(columns[2], "FromPhaseCode");
+        var toPhaseCode = NormalizeRequired(columns[3], "ToPhaseCode");
+        if (string.Equals(fromPhaseCode, toPhaseCode, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("WorkflowTransitionSamePhase");
+        }
+
+        var conditionExpr = NormalizeNullable(columns[4]);
+        return new TransitionImportRow(rowNumber, templateName, version, fromPhaseCode, toPhaseCode, conditionExpr);
+    }
+
+    private static RolePermissionImportRow ParseRolePermissionRow(string[] columns, int rowNumber)
+    {
+        var templateName = NormalizeRequired(columns[0], "TemplateName");
+        var version = ParsePositiveInt(columns[1], "Version");
+        var phaseCode = NormalizeRequired(columns[2], "PhaseCode");
+        var roleCode = NormalizeRoleCode(columns[3]);
+        var canView = ParseBoolean(columns[4], "CanView");
+        var canEdit = ParseBoolean(columns[5], "CanEdit");
+        var canSubmit = ParseBoolean(columns[6], "CanSubmit");
+        var canAdvance = ParseBoolean(columns[7], "CanAdvance");
+        var conditionExpr = NormalizeNullable(columns[8]);
+        return new RolePermissionImportRow(rowNumber, templateName, version, phaseCode, roleCode, canView, canEdit, canSubmit, canAdvance, conditionExpr);
+    }
+
+    private static FieldPolicyImportRow ParseFieldPolicyRow(string[] columns, int rowNumber)
+    {
+        var templateName = NormalizeRequired(columns[0], "TemplateName");
+        var version = ParsePositiveInt(columns[1], "Version");
+        var phaseCode = NormalizeRequired(columns[2], "PhaseCode");
+        var fieldKey = NormalizeRequired(columns[3], "FieldKey");
+        var roleCode = NormalizeRoleCode(columns[4]);
+        var access = NormalizeAccess(columns[5]);
+        var isRequired = ParseBoolean(columns[6], "IsRequired");
+        var conditionExpr = NormalizeNullable(columns[7]);
+        return new FieldPolicyImportRow(rowNumber, templateName, version, phaseCode, fieldKey, roleCode, access, isRequired, conditionExpr);
+    }
+
+    private static int ParsePositiveInt(string? value, string fieldName)
+    {
+        if (!int.TryParse(NormalizeRequired(value, fieldName), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
+        {
+            throw new BusinessException($"{fieldName}Invalid");
+        }
+
+        return parsed;
+    }
+
+    private static bool ParseBoolean(string? value, string fieldName)
+    {
+        var normalized = NormalizeRequired(value, fieldName).ToLowerInvariant();
+        return normalized switch
+        {
+            "true" or "1" or "yes" or "y" or "si" or "s" => true,
+            "false" or "0" or "no" or "n" => false,
+            _ => throw new BusinessException($"{fieldName}Invalid")
+        };
+    }
+
+    private static ProcessTemplate? ResolveTemplate(
+        TemplateKey key,
+        IReadOnlyDictionary<TemplateKey, ProcessTemplate> staged,
+        IReadOnlyDictionary<TemplateKey, ProcessTemplate> existing)
+        => staged.TryGetValue(key, out var stagedEntity)
+            ? stagedEntity
+            : existing.GetValueOrDefault(key);
+
+    private static ProcessPhase? ResolvePhase(
+        PhaseKey key,
+        IReadOnlyDictionary<PhaseKey, ProcessPhase> staged,
+        IReadOnlyDictionary<PhaseKey, ProcessPhase> existing)
+        => staged.TryGetValue(key, out var stagedEntity)
+            ? stagedEntity
+            : existing.GetValueOrDefault(key);
+
+    private static void AddPreview(WorkflowImportResultDto result, string section, int rowNumber, string key, string status)
+        => result.Rows.Add(new WorkflowImportRowResultDto
+        {
+            Section = section,
+            RowNumber = rowNumber,
+            Key = key,
+            Status = status
+        });
+
+    private static void AddError(WorkflowImportResultDto result, string section, int rowNumber, string key, string message)
+    {
+        result.HasErrors = true;
+        result.Rows.Add(new WorkflowImportRowResultDto
+        {
+            Section = section,
+            RowNumber = rowNumber,
+            Key = key,
+            Status = "Error",
+            Message = message
+        });
+    }
+
+    private static string UiErrorMessage(Exception ex)
+        => ex is BusinessException businessException
+            ? businessException.Code ?? businessException.Message
+            : ex.Message;
+
+    private static class WorkflowImportSections
+    {
+        public const string Templates = "Templates";
+        public const string Phases = "Phases";
+        public const string Transitions = "Transitions";
+        public const string RolePermissions = "RolePermissions";
+        public const string FieldPolicies = "FieldPolicies";
+    }
+
+    private abstract record ImportRowBase(int RowNumber, string Key);
+
+    private sealed record TemplateImportRow(int RowNumber, string TemplateName, int Version, bool IsDefault)
+        : ImportRowBase(RowNumber, $"{TemplateName}|v{Version}")
+    {
+        public TemplateKey TemplateKey => new(TemplateName, Version);
+    }
+
+    private sealed record PhaseImportRow(
+        int RowNumber,
+        string TemplateName,
+        int Version,
+        string PhaseCode,
+        string PhaseName,
+        int PhaseOrder,
+        bool IsTerminal,
+        string? StartRule,
+        string? EndRule)
+        : ImportRowBase(RowNumber, $"{TemplateName}|v{Version}|{PhaseCode}")
+    {
+        public TemplateKey TemplateKey => new(TemplateName, Version);
+        public PhaseKey PhaseKey => new(TemplateKey, PhaseCode);
+    }
+
+    private sealed record TransitionImportRow(
+        int RowNumber,
+        string TemplateName,
+        int Version,
+        string FromPhaseCode,
+        string ToPhaseCode,
+        string? ConditionExpr)
+        : ImportRowBase(RowNumber, $"{TemplateName}|v{Version}|{FromPhaseCode}->{ToPhaseCode}")
+    {
+        public TemplateKey TemplateKey => new(TemplateName, Version);
+        public TransitionKey TransitionKey => new(TemplateKey, FromPhaseCode, ToPhaseCode);
+    }
+
+    private sealed record RolePermissionImportRow(
+        int RowNumber,
+        string TemplateName,
+        int Version,
+        string PhaseCode,
+        string RoleCode,
+        bool CanView,
+        bool CanEdit,
+        bool CanSubmit,
+        bool CanAdvance,
+        string? ConditionExpr)
+        : ImportRowBase(RowNumber, $"{TemplateName}|v{Version}|{PhaseCode}|{RoleCode}")
+    {
+        public TemplateKey TemplateKey => new(TemplateName, Version);
+        public RolePermissionKey PermissionKey => new(TemplateKey, PhaseCode, RoleCode);
+    }
+
+    private sealed record FieldPolicyImportRow(
+        int RowNumber,
+        string TemplateName,
+        int Version,
+        string PhaseCode,
+        string FieldKey,
+        string RoleCode,
+        string Access,
+        bool IsRequired,
+        string? ConditionExpr)
+        : ImportRowBase(RowNumber, $"{TemplateName}|v{Version}|{PhaseCode}|{FieldKey}|{RoleCode}")
+    {
+        public TemplateKey TemplateKey => new(TemplateName, Version);
+        public FieldPolicyKey PolicyKey => new(TemplateKey, PhaseCode, FieldKey, RoleCode);
+    }
+
+    private sealed record TemplateKey(string TemplateName, int Version);
+    private sealed record PhaseKey(TemplateKey TemplateKey, string PhaseCode);
+    private sealed record TransitionKey(TemplateKey TemplateKey, string FromPhaseCode, string ToPhaseCode);
+    private sealed record RolePermissionKey(TemplateKey TemplateKey, string PhaseCode, string RoleCode);
+    private sealed record FieldPolicyKey(TemplateKey TemplateKey, string PhaseCode, string FieldKey, string RoleCode);
 }

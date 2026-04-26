@@ -156,6 +156,142 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Import massivo workflow</strong>
+                <span class="badge text-bg-light">no partial save</span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    Usa l'import per creare o aggiornare template, fasi, transizioni, role permissions e field policies in modo coordinato.
+                    Se anche una sola riga e in errore, non viene salvato nulla.
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-xxl-6">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">Templates</div>
+                            <div class="small text-muted mb-2">Formato: <code>TemplateName;Version;IsDefault</code></div>
+                            <textarea class="form-control"
+                                      rows="6"
+                                      @bind="_workflowTemplatesContent"
+                                      placeholder="Performance Annuale;1;true"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-xxl-6">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">Phases</div>
+                            <div class="small text-muted mb-2">Formato: <code>TemplateName;Version;PhaseCode;PhaseName;PhaseOrder;IsTerminal;StartRule;EndRule</code></div>
+                            <textarea class="form-control"
+                                      rows="6"
+                                      @bind="_workflowPhasesContent"
+                                      placeholder="Performance Annuale;1;SELF;Autovalutazione;1;false;;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-xxl-6">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">Transitions</div>
+                            <div class="small text-muted mb-2">Formato: <code>TemplateName;Version;FromPhaseCode;ToPhaseCode;ConditionExpr</code></div>
+                            <textarea class="form-control"
+                                      rows="6"
+                                      @bind="_workflowTransitionsContent"
+                                      placeholder="Performance Annuale;1;SELF;MGR;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-xxl-6">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">Role permissions</div>
+                            <div class="small text-muted mb-2">Formato: <code>TemplateName;Version;PhaseCode;RoleCode;CanView;CanEdit;CanSubmit;CanAdvance;ConditionExpr</code></div>
+                            <textarea class="form-control"
+                                      rows="6"
+                                      @bind="_workflowRolePermissionsContent"
+                                      placeholder="Performance Annuale;1;SELF;Dipendente;true;true;true;true;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold mb-2">Field policies</div>
+                            <div class="small text-muted mb-2">Formato: <code>TemplateName;Version;PhaseCode;FieldKey;RoleCode;Access;IsRequired;ConditionExpr</code></div>
+                            <textarea class="form-control"
+                                      rows="6"
+                                      @bind="_workflowFieldPoliciesContent"
+                                      placeholder="Performance Annuale;1;SELF;Goals.ProgressPercent;Dipendente;Read;false;"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-check mt-3">
+                    <input type="checkbox" class="form-check-input" @bind="_workflowImportUpdateExisting" />
+                    <label class="form-check-label">Aggiorna righe esistenti se trovate</label>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <button class="btn btn-primary"
+                            @onclick="ImportWorkflowAsync"
+                            disabled="@(_importingWorkflow || WorkflowImportContentsAreEmpty())">
+                        @if (_importingWorkflow)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Importa workflow
+                    </button>
+                </div>
+
+                @if (_workflowImportResult is not null)
+                {
+                    <div class="mt-4">
+                        <div class="@(_workflowImportResult.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                            @if (_workflowImportResult.HasErrors)
+                            {
+                                <span>Import bloccato: correggi gli errori e riprova. Nessuna riga e stata salvata.</span>
+                            }
+                            else
+                            {
+                                <span>
+                                    Import completato.
+                                    Templates @_workflowImportResult.CreatedTemplates/@_workflowImportResult.UpdatedTemplates,
+                                    Phases @_workflowImportResult.CreatedPhases/@_workflowImportResult.UpdatedPhases,
+                                    Transitions @_workflowImportResult.CreatedTransitions/@_workflowImportResult.UpdatedTransitions,
+                                    Role permissions @_workflowImportResult.CreatedRolePermissions/@_workflowImportResult.UpdatedRolePermissions,
+                                    Field policies @_workflowImportResult.CreatedFieldPolicies/@_workflowImportResult.UpdatedFieldPolicies.
+                                </span>
+                            }
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Sezione</th>
+                                        <th>Riga</th>
+                                        <th>Chiave</th>
+                                        <th>Status</th>
+                                        <th>Messaggio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _workflowImportResult.Rows)
+                                    {
+                                        <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                            <td>@row.Section</td>
+                                            <td>@row.RowNumber</td>
+                                            <td>@row.Key</td>
+                                            <td>@row.Status</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
         <div class="row g-3 mb-4">
             <div class="col-12 col-xxl-4">
                 <div class="card shadow-sm h-100">
@@ -611,11 +747,19 @@
     private bool _savingTransition;
     private bool _savingRolePermission;
     private bool _savingFieldPolicy;
+    private bool _importingWorkflow;
     private string? _error;
     private string? _successMessage;
     private WorkflowAdminDto? _data;
+    private WorkflowImportResultDto? _workflowImportResult;
     private Guid? _selectedTemplateId;
     private Guid? _selectedPhaseId;
+    private bool _workflowImportUpdateExisting = true;
+    private string? _workflowTemplatesContent;
+    private string? _workflowPhasesContent;
+    private string? _workflowTransitionsContent;
+    private string? _workflowRolePermissionsContent;
+    private string? _workflowFieldPoliciesContent;
     private TemplateFormModel _templateForm = new();
     private PhaseFormModel _phaseForm = new();
     private TransitionFormModel _transitionForm = new();
@@ -1092,6 +1236,48 @@
             RoleCode = "*"
         };
     }
+
+    private async Task ImportWorkflowAsync()
+    {
+        _importingWorkflow = true;
+        _error = null;
+        _successMessage = null;
+        _workflowImportResult = null;
+
+        try
+        {
+            _workflowImportResult = await WorkflowAdminAppService.ImportAsync(new ImportWorkflowSetupInput
+            {
+                TemplatesContent = _workflowTemplatesContent,
+                PhasesContent = _workflowPhasesContent,
+                TransitionsContent = _workflowTransitionsContent,
+                RolePermissionsContent = _workflowRolePermissionsContent,
+                FieldPoliciesContent = _workflowFieldPoliciesContent,
+                UpdateExisting = _workflowImportUpdateExisting
+            });
+
+            if (!_workflowImportResult.HasErrors)
+            {
+                _successMessage = "Import workflow completato correttamente.";
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _importingWorkflow = false;
+        }
+    }
+
+    private bool WorkflowImportContentsAreEmpty()
+        => string.IsNullOrWhiteSpace(_workflowTemplatesContent) &&
+           string.IsNullOrWhiteSpace(_workflowPhasesContent) &&
+           string.IsNullOrWhiteSpace(_workflowTransitionsContent) &&
+           string.IsNullOrWhiteSpace(_workflowRolePermissionsContent) &&
+           string.IsNullOrWhiteSpace(_workflowFieldPoliciesContent);
 
     private string BuildUrl(Guid? templateId, Guid? phaseId)
     {
