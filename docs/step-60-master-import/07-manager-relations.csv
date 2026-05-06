@@ -1,0 +1,3 @@
+EmployeeMatricola;ManagerMatricola;RelationType;IsPrimary;StartDate;EndDate
+A101;A100;Line;true;2026-01-01;
+A102;A100;Line;true;2026-01-01;

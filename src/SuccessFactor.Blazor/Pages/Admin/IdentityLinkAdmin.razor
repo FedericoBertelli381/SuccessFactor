@@ -44,6 +44,68 @@
     else
     {
         <div class="row g-3 mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <strong>Nuovo utente ABP</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">UserName</label>
+                                <input class="form-control" @bind="_newUser.UserName" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Email</label>
+                                <input class="form-control" @bind="_newUser.Email" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Password</label>
+                                <input class="form-control" type="password" @bind="_newUser.Password" />
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Nome</label>
+                                <input class="form-control" @bind="_newUser.Name" />
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Cognome</label>
+                                <input class="form-control" @bind="_newUser.Surname" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label d-block">Ruoli applicativi</label>
+                                <div class="d-flex flex-wrap gap-3">
+                                    @foreach (var role in AvailableAppRoles)
+                                    {
+                                        <div class="form-check">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   checked="@_newUser.Roles.Contains(role)"
+                                                   @onchange="e => ToggleNewUserRole(role, e.Value)" />
+                                            <label class="form-check-label">@role</label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mt-4">
+                            <button class="btn btn-primary"
+                                    @onclick="CreateUserAsync"
+                                    disabled="@_creatingUser">
+                                @if (_creatingUser)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Crea utente
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="ResetNewUserForm">
+                                Pulisci form
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-12 col-xxl-5">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-white">
@@ -123,6 +185,7 @@
                                             <th>UserName</th>
                                             <th>Email</th>
                                             <th>Nome</th>
+                                            <th>Stato</th>
                                             <th></th>
                                         </tr>
                                     </thead>
@@ -133,6 +196,11 @@
                                                 <td class="fw-semibold">@user.UserName</td>
                                                 <td>@(string.IsNullOrWhiteSpace(user.Email) ? "-" : user.Email)</td>
                                                 <td>@($"{user.Name} {user.Surname}".Trim())</td>
+                                                <td>
+                                                    <span class="badge @(user.IsActive ? "text-bg-success" : "text-bg-secondary")">
+                                                        @(user.IsActive ? "Attivo" : "Disattivo")
+                                                    </span>
+                                                </td>
                                                 <td class="text-end">
                                                     <button class="btn btn-sm btn-outline-secondary"
                                                             @onclick="() => SelectUser(user.Id)">
@@ -143,6 +211,53 @@
                                         }
                                     </tbody>
                                 </table>
+                            </div>
+                        }
+
+                        @if (SelectedUser is not null)
+                        {
+                            <div class="border rounded p-3 mt-3">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                    <div>
+                                        <div class="fw-semibold">@SelectedUser.UserName</div>
+                                        <div class="small text-muted">email: @(string.IsNullOrWhiteSpace(SelectedUser.Email) ? "-" : SelectedUser.Email)</div>
+                                        <div class="small text-muted">nome: @($"{SelectedUser.Name} {SelectedUser.Surname}".Trim())</div>
+                                    </div>
+                                    <span class="badge @(SelectedUser.IsActive ? "text-bg-success" : "text-bg-secondary")">
+                                        @(SelectedUser.IsActive ? "Attivo" : "Disattivo")
+                                    </span>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-12 col-lg-7">
+                                        <label class="form-label">Nuova password</label>
+                                        <input class="form-control" type="password" @bind="_resetPassword" />
+                                        <div class="form-text">Puoi impostare anche password semplici, ad esempio <code>q</code>.</div>
+                                    </div>
+                                    <div class="col-12 col-lg-5 d-flex align-items-end">
+                                        <button class="btn btn-outline-primary w-100"
+                                                @onclick="ResetSelectedUserPasswordAsync"
+                                                disabled="@(_userAdminActionBusy || string.IsNullOrWhiteSpace(_resetPassword))">
+                                            @if (_userAdminActionBusy)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                            }
+                                            Reset password
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <button class="btn btn-outline-warning"
+                                            @onclick="ToggleSelectedUserActiveAsync"
+                                            disabled="@_userAdminActionBusy">
+                                        @if (_userAdminActionBusy)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        @(SelectedUser.IsActive ? "Disattiva utente" : "Riattiva utente")
+                                    </button>
+                                </div>
                             </div>
                         }
 
@@ -159,6 +274,82 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Import massivo utenti ABP</strong>
+                <span class="badge text-bg-light">no partial save</span>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    Formato: <code>UserName;Email;Name;Surname;Password;Roles</code>.
+                    <br />
+                    <span><code>Roles</code> supportati: <code>admin</code>, <code>HR</code>, <code>Responsabile</code>, <code>Dipendente</code>. Separatore ruoli: <code>|</code> oppure <code>,</code>.</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">CSV</label>
+                    <textarea class="form-control"
+                              rows="6"
+                              @bind="_userImportContent"
+                              placeholder="UserName;Email;Name;Surname;Password;Roles"></textarea>
+                </div>
+
+                <button class="btn btn-primary"
+                        @onclick="ImportUsersAsync"
+                        disabled="@(_userImporting || string.IsNullOrWhiteSpace(_userImportContent))">
+                    @if (_userImporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Importa utenti
+                </button>
+
+                @if (_userImportResult is not null)
+                {
+                    <div class="mt-4">
+                        <div class="@(_userImportResult.HasErrors ? "alert alert-warning" : "alert alert-success")">
+                            @if (_userImportResult.HasErrors)
+                            {
+                                <span>Import utenti bloccato: correggi gli errori e riprova. Nessun utente e stato creato.</span>
+                            }
+                            else
+                            {
+                                <span>Import utenti completato. Creati: @_userImportResult.CreatedCount.</span>
+                            }
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Riga</th>
+                                        <th>UserName</th>
+                                        <th>Email</th>
+                                        <th>Roles</th>
+                                        <th>Status</th>
+                                        <th>Messaggio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _userImportResult.Rows)
+                                    {
+                                        <tr class="@(row.Status == "Error" ? "table-warning" : null)">
+                                            <td>@row.RowNumber</td>
+                                            <td>@row.UserName</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Email) ? "-" : row.Email)</td>
+                                            <td>@row.Roles</td>
+                                            <td>@row.Status</td>
+                                            <td>@(string.IsNullOrWhiteSpace(row.Message) ? "-" : row.Message)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
 
@@ -386,9 +577,14 @@
     private bool _loading;
     private bool _linking;
     private bool _searchingUsers;
+    private bool _creatingUser;
+    private bool _userImporting;
+    private bool _userAdminActionBusy;
     private string? _error;
     private string? _successMessage;
     private string? _userSearch;
+    private string? _userImportContent;
+    private string? _resetPassword;
     private string? _importContent;
     private string? _roleImportContent;
     private Guid? _selectedEmployeeId;
@@ -396,13 +592,24 @@
     private bool _importing;
     private bool _roleImporting;
     private bool _importUpdateExistingLinks;
+    private IdentityUserImportResultDto? _userImportResult;
     private EmployeeUserLinkImportResultDto? _importResult;
     private UserRoleImportResultDto? _roleImportResult;
     private List<UnlinkedEmployeeDto> _unlinkedEmployees = [];
     private List<LinkedEmployeeDto> _linkedEmployees = [];
     private List<IdentityUserLookupDto> _userResults = [];
+    private NewUserFormModel _newUser = new();
+
+    private static string[] AvailableAppRoles =>
+    [
+        SuccessFactorRoles.Admin,
+        SuccessFactorRoles.Hr,
+        SuccessFactorRoles.Manager,
+        SuccessFactorRoles.Employee
+    ];
 
     private UnlinkedEmployeeDto? SelectedEmployee => _unlinkedEmployees.FirstOrDefault(x => x.EmployeeId == _selectedEmployeeId);
+    private IdentityUserLookupDto? SelectedUser => _userResults.FirstOrDefault(x => x.Id == _selectedUserId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -477,6 +684,70 @@
     private void SelectUser(Guid userId)
     {
         _selectedUserId = userId;
+        _resetPassword = null;
+    }
+
+    private async Task CreateUserAsync()
+    {
+        _creatingUser = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var created = await EmployeeUserLinkAppService.CreateUserAsync(new CreateIdentityUserInput
+            {
+                UserName = _newUser.UserName ?? string.Empty,
+                Email = _newUser.Email ?? string.Empty,
+                Name = _newUser.Name,
+                Surname = _newUser.Surname,
+                Password = _newUser.Password ?? string.Empty,
+                Roles = _newUser.Roles.ToList()
+            });
+
+            _successMessage = $"Utente creato correttamente: {created.UserName}.";
+            ResetNewUserForm();
+            await SearchUsersAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _creatingUser = false;
+        }
+    }
+
+    private async Task ImportUsersAsync()
+    {
+        _userImporting = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            _userImportResult = await EmployeeUserLinkAppService.ImportUsersAsync(new ImportIdentityUsersInput
+            {
+                Content = _userImportContent ?? string.Empty
+            });
+
+            if (!_userImportResult.HasErrors)
+            {
+                _successMessage = $"Import utenti completato. Creati: {_userImportResult.CreatedCount}.";
+                await SearchUsersAsync();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _userImporting = false;
+        }
     }
 
     private async Task LinkSelectedAsync()
@@ -624,12 +895,115 @@
         }
     }
 
+    private async Task ResetSelectedUserPasswordAsync()
+    {
+        if (SelectedUser is null || string.IsNullOrWhiteSpace(_resetPassword))
+        {
+            return;
+        }
+
+        _userAdminActionBusy = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            await EmployeeUserLinkAppService.ResetUserPasswordAsync(new ResetIdentityUserPasswordInput
+            {
+                UserId = SelectedUser.Id,
+                NewPassword = _resetPassword
+            });
+
+            _successMessage = $"Password aggiornata correttamente per {SelectedUser.UserName}.";
+            _resetPassword = null;
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _userAdminActionBusy = false;
+        }
+    }
+
+    private async Task ToggleSelectedUserActiveAsync()
+    {
+        if (SelectedUser is null)
+        {
+            return;
+        }
+
+        _userAdminActionBusy = true;
+        _error = null;
+        _successMessage = null;
+
+        try
+        {
+            var userName = SelectedUser.UserName;
+            var newStatus = !SelectedUser.IsActive;
+
+            await EmployeeUserLinkAppService.SetUserActiveAsync(new SetIdentityUserActiveInput
+            {
+                UserId = SelectedUser.Id,
+                IsActive = newStatus
+            });
+
+            _successMessage = newStatus
+                ? $"Utente {userName} riattivato correttamente."
+                : $"Utente {userName} disattivato correttamente.";
+
+            await SearchUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = UiErrorMessage.From(ex);
+        }
+        finally
+        {
+            _userAdminActionBusy = false;
+        }
+    }
+
     private bool CanLinkSelected()
         => _selectedEmployeeId.HasValue && _selectedUserId.HasValue;
+
+    private void ToggleNewUserRole(string role, object? value)
+    {
+        var isChecked = value as bool? == true;
+
+        if (isChecked)
+        {
+            if (!_newUser.Roles.Contains(role))
+            {
+                _newUser.Roles.Add(role);
+            }
+        }
+        else
+        {
+            _newUser.Roles.Remove(role);
+        }
+    }
+
+    private void ResetNewUserForm()
+    {
+        _newUser = new NewUserFormModel();
+    }
 
     private void ResetSelection()
     {
         _selectedEmployeeId = null;
         _selectedUserId = null;
+        _resetPassword = null;
+    }
+
+    private sealed class NewUserFormModel
+    {
+        public string? UserName { get; set; }
+        public string? Email { get; set; }
+        public string? Name { get; set; }
+        public string? Surname { get; set; }
+        public string? Password { get; set; }
+        public HashSet<string> Roles { get; set; } = [];
     }
 }

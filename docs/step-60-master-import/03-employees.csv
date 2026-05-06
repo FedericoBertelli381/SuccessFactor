@@ -1,0 +1,5 @@
+Matricola;FullName;Email;OrgUnit;JobRole;IsActive
+A100;Mario Rossi;mario.rossi@acme.test;Sales;Sales Manager;true
+A101;Giulia Bianchi;giulia.bianchi@acme.test;Sales;Sales Specialist;true
+A102;Luca Verdi;luca.verdi@acme.test;Operations;Operations Specialist;true
+A103;Sara Neri;sara.neri@acme.test;HR;HR Manager;true

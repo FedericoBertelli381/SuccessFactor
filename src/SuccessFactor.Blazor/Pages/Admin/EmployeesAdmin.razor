@@ -123,12 +123,23 @@
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <strong>Employees</strong>
-                        <span class="badge text-bg-light">@_data.Employees.Count</span>
+                        <span class="badge text-bg-light">@FilteredEmployees.Count</span>
                     </div>
                     <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Cerca</label>
+                            <InputText class="form-control"
+                                       @bind-Value="_employeeSearch"
+                                       placeholder="Matricola, nome, email, org unit, job role, attivo, linked..." />
+                        </div>
+
                         @if (_data.Employees.Count == 0)
                         {
                             <div class="text-muted">Nessun employee presente.</div>
+                        }
+                        else if (FilteredEmployees.Count == 0)
+                        {
+                            <div class="text-muted">Nessun employee corrisponde al filtro di ricerca.</div>
                         }
                         else
                         {
@@ -147,7 +158,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var item in _data.Employees)
+                                        @foreach (var item in FilteredEmployees)
                                         {
                                             <tr class="@(_form.EmployeeId == item.EmployeeId ? "table-primary" : null)">
                                                 <td>@item.Matricola</td>
@@ -258,6 +269,7 @@
     private bool _saving;
     private string? _error;
     private string? _successMessage;
+    private string? _employeeSearch;
     private bool _importing;
     private bool _importUpdateExisting = true;
     private string? _importContent;
@@ -412,6 +424,37 @@
         }
 
         return null;
+    }
+
+    private List<EmployeeAdminListItemDto> FilteredEmployees
+        => _data?.Employees
+               .Where(MatchesEmployeeSearch)
+               .ToList()
+           ?? [];
+
+    private bool MatchesEmployeeSearch(EmployeeAdminListItemDto item)
+    {
+        if (string.IsNullOrWhiteSpace(_employeeSearch))
+        {
+            return true;
+        }
+
+        var search = _employeeSearch.Trim();
+        var values = new[]
+        {
+            item.Matricola,
+            item.FullName,
+            item.Email,
+            item.OrgUnitName,
+            item.JobRoleName,
+            item.IsActive ? "si" : "no",
+            item.IsActive ? "attivo" : "inattivo",
+            item.UserId.HasValue ? "linked" : "unlinked",
+            item.UserId.HasValue ? "collegato" : "non collegato"
+        };
+
+        return values.Any(value => !string.IsNullOrWhiteSpace(value) &&
+                                   value.Contains(search, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string YesNo(bool value) => value ? "Si" : "No";

@@ -62,7 +62,8 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
             UserName = u.UserName ?? "",
             Email = u.Email,
             Name = u.Name,
-            Surname = u.Surname
+            Surname = u.Surname,
+            IsActive = u.IsActive
         }).ToArray();
     }
 
@@ -123,6 +124,214 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
             UserName = x.UserName ?? string.Empty,
             UserEmail = x.UserEmail
         }).ToArray();
+    }
+
+    public async Task<CreatedIdentityUserDto> CreateUserAsync(CreateIdentityUserInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        var userName = NormalizeRequired(input.UserName, "UserName");
+        var email = NormalizeRequired(input.Email, "Email");
+        var password = NormalizeRequired(input.Password, "Password");
+        var name = NormalizeOptionalImportValue(input.Name);
+        var surname = NormalizeOptionalImportValue(input.Surname);
+        var roles = await NormalizeAndValidateRolesAsync(input.Roles);
+
+        await EnsureNoDuplicateUserAsync(userName, email);
+
+        var user = new IdentityUser(GuidGenerator.Create(), userName, email, CurrentTenant.Id)
+        {
+            Name = name,
+            Surname = surname
+        };
+
+        var createResult = await _identityUserManager.CreateAsync(user, password);
+        EnsureIdentityResultSucceeded(createResult);
+
+        if (roles.Count > 0)
+        {
+            var addRoleResult = await _identityUserManager.AddToRolesAsync(user, roles);
+            EnsureIdentityResultSucceeded(addRoleResult);
+        }
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync("IdentityUserCreated", "IdentityUser", user.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["UserName"] = user.UserName,
+            ["Email"] = user.Email,
+            ["Roles"] = roles
+        });
+
+        return new CreatedIdentityUserDto
+        {
+            Id = user.Id,
+            UserName = user.UserName ?? string.Empty,
+            Email = user.Email,
+            Name = user.Name,
+            Surname = user.Surname,
+            Roles = roles
+        };
+    }
+
+    public async Task<IdentityUserImportResultDto> ImportUsersAsync(ImportIdentityUsersInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input is null || string.IsNullOrWhiteSpace(input.Content))
+        {
+            throw new BusinessException("IdentityUserImportContentRequired");
+        }
+
+        var allowedRoles = new[]
+        {
+            SuccessFactorRoles.Admin,
+            SuccessFactorRoles.Hr,
+            SuccessFactorRoles.Manager,
+            SuccessFactorRoles.Employee
+        };
+
+        var userQuery = await _userRepo.GetQueryableAsync();
+        var existingUsers = await AsyncExecuter.ToListAsync(userQuery);
+        var existingByUserName = existingUsers
+            .Where(x => !string.IsNullOrWhiteSpace(x.UserName))
+            .ToDictionary(x => x.UserName!, StringComparer.OrdinalIgnoreCase);
+        var existingByEmail = existingUsers
+            .Where(x => !string.IsNullOrWhiteSpace(x.Email))
+            .ToDictionary(x => x.Email!, StringComparer.OrdinalIgnoreCase);
+
+        var roleQuery = await _roleRepo.GetQueryableAsync();
+        var existingRoles = await AsyncExecuter.ToListAsync(roleQuery);
+        var existingRoleNames = new HashSet<string>(existingRoles.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x))!, StringComparer.OrdinalIgnoreCase);
+
+        var parsedRows = ParseUserImportRows(input.Content);
+        var result = new IdentityUserImportResultDto();
+        var validRows = new List<UserImportRow>();
+        var seenUserNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in parsedRows)
+        {
+            var validationMessage = ValidateUserImportRow(
+                row,
+                existingByUserName,
+                existingByEmail,
+                allowedRoles,
+                existingRoleNames,
+                seenUserNames,
+                seenEmails,
+                out var normalizedRoles);
+
+            if (!string.IsNullOrWhiteSpace(validationMessage))
+            {
+                result.Rows.Add(new IdentityUserImportRowResultDto
+                {
+                    RowNumber = row.RowNumber,
+                    UserName = row.UserName,
+                    Email = row.Email,
+                    Roles = row.RolesRaw,
+                    Status = "Error",
+                    Message = validationMessage
+                });
+                continue;
+            }
+
+            row.Roles = normalizedRoles!;
+            validRows.Add(row);
+
+            result.Rows.Add(new IdentityUserImportRowResultDto
+            {
+                RowNumber = row.RowNumber,
+                UserName = row.UserName,
+                Email = row.Email,
+                Roles = string.Join(", ", row.Roles),
+                Status = "Create"
+            });
+        }
+
+        result.ErrorCount = result.Rows.Count(x => x.Status == "Error");
+        result.HasErrors = result.ErrorCount > 0;
+
+        if (result.HasErrors)
+        {
+            return result;
+        }
+
+        foreach (var row in validRows)
+        {
+            var user = new IdentityUser(GuidGenerator.Create(), row.UserName, row.Email, CurrentTenant.Id)
+            {
+                Name = row.Name,
+                Surname = row.Surname
+            };
+
+            var createResult = await _identityUserManager.CreateAsync(user, row.Password);
+            EnsureIdentityResultSucceeded(createResult);
+
+            if (row.Roles.Count > 0)
+            {
+                var addRoleResult = await _identityUserManager.AddToRolesAsync(user, row.Roles);
+                EnsureIdentityResultSucceeded(addRoleResult);
+            }
+
+            result.CreatedCount++;
+        }
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync("IdentityUserImportCompleted", "IdentityUserImport", null, new Dictionary<string, object?>
+        {
+            ["CreatedCount"] = result.CreatedCount,
+            ["RowsCount"] = result.Rows.Count
+        });
+
+        return result;
+    }
+
+    public async Task ResetUserPasswordAsync(ResetIdentityUserPasswordInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input is null)
+        {
+            throw new BusinessException("IdentityUserResetPasswordInputRequired");
+        }
+
+        var password = NormalizeRequired(input.NewPassword, "NewPassword");
+        var user = await _identityUserManager.GetByIdAsync(input.UserId);
+
+        var token = await _identityUserManager.GeneratePasswordResetTokenAsync(user);
+        var resetResult = await _identityUserManager.ResetPasswordAsync(user, token, password);
+        EnsureIdentityResultSucceeded(resetResult);
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync("IdentityUserPasswordReset", "IdentityUser", user.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["UserName"] = user.UserName,
+            ["Email"] = user.Email
+        });
+    }
+
+    public async Task SetUserActiveAsync(SetIdentityUserActiveInput input)
+    {
+        EnsureTenantAndAdmin();
+
+        if (input is null)
+        {
+            throw new BusinessException("IdentityUserStatusInputRequired");
+        }
+
+        var user = await _identityUserManager.GetByIdAsync(input.UserId);
+        user.SetIsActive(input.IsActive);
+
+        var updateResult = await _identityUserManager.UpdateAsync(user);
+        EnsureIdentityResultSucceeded(updateResult);
+
+        await CurrentUnitOfWork.SaveChangesAsync();
+        await _auditLogger.LogAsync(input.IsActive ? "IdentityUserActivated" : "IdentityUserDeactivated", "IdentityUser", user.Id.ToString(), new Dictionary<string, object?>
+        {
+            ["UserName"] = user.UserName,
+            ["Email"] = user.Email,
+            ["IsActive"] = input.IsActive
+        });
     }
 
     public async Task<EmployeeUserLinkImportResultDto> ImportAsync(ImportEmployeeUserLinksInput input)
@@ -667,8 +876,9 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
         }
 
         var message = string.Join("; ", result.Errors.Select(x => x.Description));
-        throw new BusinessException("IdentityRoleUpdateFailed")
-            .WithData("Reason", message);
+        throw new UserFriendlyException(string.IsNullOrWhiteSpace(message)
+            ? "Operazione utenti non riuscita."
+            : message);
     }
 
     private static string NormalizeMatchMode(string? value)
@@ -916,5 +1126,190 @@ public class EmployeeUserLinkAppService : ApplicationService, IEmployeeUserLinkA
         public IdentityUser User { get; set; } = default!;
         public List<string> Roles { get; set; } = [];
         public string Mode { get; set; } = "Add";
+    }
+
+    private async Task EnsureNoDuplicateUserAsync(string userName, string email)
+    {
+        var query = await _userRepo.GetQueryableAsync();
+        var exists = await AsyncExecuter.AnyAsync(query.Where(x =>
+            (x.UserName != null && x.UserName == userName) ||
+            (x.Email != null && x.Email == email)));
+
+        if (exists)
+        {
+            throw new BusinessException("IdentityUserAlreadyExists");
+        }
+    }
+
+    private async Task<List<string>> NormalizeAndValidateRolesAsync(IEnumerable<string>? inputRoles)
+    {
+        var normalizedRoles = (inputRoles ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(SuccessFactorRoles.Normalize)
+            .ToList();
+
+        if (normalizedRoles.Any(x => x is null))
+        {
+            throw new BusinessException("IdentityUserRoleInvalid");
+        }
+
+        var roles = normalizedRoles
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (roles.Count == 0)
+        {
+            return roles;
+        }
+
+        var roleQuery = await _roleRepo.GetQueryableAsync();
+        var existingRoleNames = new HashSet<string>(
+            (await AsyncExecuter.ToListAsync(roleQuery))
+                .Select(x => x.Name)
+                .Where(x => !string.IsNullOrWhiteSpace(x))!,
+            StringComparer.OrdinalIgnoreCase);
+
+        var missingRoles = roles.Where(x => !existingRoleNames.Contains(x)).ToList();
+        if (missingRoles.Count > 0)
+        {
+            throw new BusinessException("IdentityUserRoleMissingInTenant")
+                .WithData("Roles", string.Join(", ", missingRoles));
+        }
+
+        return roles;
+    }
+
+    private static List<UserImportRow> ParseUserImportRows(string content)
+    {
+        var result = new List<UserImportRow>();
+        var lines = content
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select((line, index) => new { Line = line.Trim(), RowNumber = index + 1 })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Line))
+            .ToList();
+
+        foreach (var line in lines)
+        {
+            var columns = SplitImportLine(line.Line);
+            if (columns.Length > 0 && string.Equals(columns[0], "UserName", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            result.Add(new UserImportRow
+            {
+                RowNumber = line.RowNumber,
+                UserName = GetColumn(columns, 0),
+                Email = GetColumn(columns, 1),
+                Name = NormalizeOptionalImportValue(GetColumn(columns, 2)),
+                Surname = NormalizeOptionalImportValue(GetColumn(columns, 3)),
+                Password = GetColumn(columns, 4),
+                RolesRaw = GetColumn(columns, 5)
+            });
+        }
+
+        return result;
+    }
+
+    private static string? ValidateUserImportRow(
+        UserImportRow row,
+        Dictionary<string, IdentityUser> existingByUserName,
+        Dictionary<string, IdentityUser> existingByEmail,
+        string[] allowedRoles,
+        HashSet<string> existingRoleNames,
+        HashSet<string> seenUserNames,
+        HashSet<string> seenEmails,
+        out List<string>? normalizedRoles)
+    {
+        normalizedRoles = null;
+
+        if (string.IsNullOrWhiteSpace(row.UserName))
+        {
+            return "UserName obbligatorio.";
+        }
+
+        if (string.IsNullOrWhiteSpace(row.Email))
+        {
+            return "Email obbligatoria.";
+        }
+
+        if (string.IsNullOrWhiteSpace(row.Password))
+        {
+            return "Password obbligatoria.";
+        }
+
+        if (!seenUserNames.Add(row.UserName))
+        {
+            return "UserName duplicato nel file.";
+        }
+
+        if (!seenEmails.Add(row.Email))
+        {
+            return "Email duplicata nel file.";
+        }
+
+        if (existingByUserName.ContainsKey(row.UserName))
+        {
+            return "UserName gia esistente.";
+        }
+
+        if (existingByEmail.ContainsKey(row.Email))
+        {
+            return "Email gia esistente.";
+        }
+
+        var roleTokens = SplitRoles(row.RolesRaw)
+            .Select(SuccessFactorRoles.Normalize)
+            .ToList();
+
+        if (roleTokens.Any(x => x is null))
+        {
+            return "Uno o piu ruoli non sono riconosciuti.";
+        }
+
+        normalizedRoles = roleTokens
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var unsupported = normalizedRoles.Except(allowedRoles, StringComparer.OrdinalIgnoreCase).ToList();
+        if (unsupported.Count > 0)
+        {
+            return $"Ruoli non supportati: {string.Join(", ", unsupported)}.";
+        }
+
+        var missingInDb = normalizedRoles.Where(x => !existingRoleNames.Contains(x)).ToList();
+        if (missingInDb.Count > 0)
+        {
+            return $"Ruoli non presenti nel tenant: {string.Join(", ", missingInDb)}.";
+        }
+
+        return null;
+    }
+
+    private static string NormalizeRequired(string? value, string fieldName)
+    {
+        var normalized = NormalizeOptionalImportValue(value);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            throw new BusinessException($"{fieldName}Required");
+        }
+
+        return normalized;
+    }
+
+    private sealed class UserImportRow
+    {
+        public int RowNumber { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public string? Surname { get; set; }
+        public string Password { get; set; } = string.Empty;
+        public string RolesRaw { get; set; } = string.Empty;
+        public List<string> Roles { get; set; } = [];
     }
 }

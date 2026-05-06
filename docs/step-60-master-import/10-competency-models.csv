@@ -1,0 +1,4 @@
+ModelName;ScaleType;MinScore;MaxScore;CompetencyCode;Weight;IsRequired
+Default 5 Scale;Numeric;1;5;TEAMWORK;35;true
+Default 5 Scale;Numeric;1;5;OWNERSHIP;35;true
+Default 5 Scale;Numeric;1;5;COMMUNICATION;30;true

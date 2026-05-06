@@ -1,0 +1,5 @@
+UserName;Email;Matricola;Roles;Mode
+m.rossi;mario.rossi@acme.test;A100;Responsabile|Dipendente;Replace
+g.bianchi;giulia.bianchi@acme.test;A101;Dipendente;Replace
+l.verdi;luca.verdi@acme.test;A102;Dipendente;Replace
+s.neri;sara.neri@acme.test;A103;admin|HR;Replace

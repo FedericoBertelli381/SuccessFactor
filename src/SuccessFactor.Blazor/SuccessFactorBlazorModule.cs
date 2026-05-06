@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -135,6 +136,15 @@ public class SuccessFactorBlazorModule : AbpModule
         Configure<AbpExceptionHandlingOptions>(options =>
         {
             options.SendExceptionsDetailsToClients = true;
+        });
+        Configure<IdentityOptions>(options =>
+        {
+            options.Password.RequiredLength = 1;
+            options.Password.RequiredUniqueChars = 0;
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
         });
         var hostingEnvironment = context.Services.GetHostingEnvironment();
         var configuration = context.Services.GetConfiguration();
